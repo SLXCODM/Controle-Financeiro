@@ -1,12 +1,13 @@
-import { AdMob, AdOptions, InterstitialAdPluginEvents, AdLoadInfo } from '@capacitor-community/admob';
+import { AdMob, AdOptions, BannerAdOptions, BannerAdSize, BannerAdPosition, BannerAdPluginEvents, InterstitialAdPluginEvents, AdLoadInfo } from '@capacitor-community/admob';
 import { Capacitor } from '@capacitor/core';
 
 const INTERSTITIAL_AD_ID = 'ca-app-pub-2053964731459379/5584140065';
+const BANNER_AD_ID = 'ca-app-pub-2053964731459379/1313722563';
 
 let isAdLoaded = false;
 let isInitialized = false;
 let navigationCount = 0;
-const SHOW_AD_EVERY_N_NAVIGATIONS = 3; // Show ad every 3 page transitions
+const SHOW_AD_EVERY_N_NAVIGATIONS = 3;
 
 export async function initializeAdMob(): Promise<void> {
   if (!Capacitor.isNativePlatform() || isInitialized) return;
@@ -31,6 +32,7 @@ export async function initializeAdMob(): Promise<void> {
     });
 
     await prepareInterstitial();
+    await showBanner();
   } catch (error) {
     console.error('AdMob initialization error:', error);
   }
@@ -46,6 +48,22 @@ export async function prepareInterstitial(): Promise<void> {
     await AdMob.prepareInterstitial(options);
   } catch (error) {
     console.error('Failed to prepare interstitial:', error);
+  }
+}
+
+export async function showBanner(): Promise<void> {
+  if (!Capacitor.isNativePlatform() || !isInitialized) return;
+
+  try {
+    const options: BannerAdOptions = {
+      adId: BANNER_AD_ID,
+      adSize: BannerAdSize.ADAPTIVE_BANNER,
+      position: BannerAdPosition.BOTTOM_CENTER,
+      margin: 0,
+    };
+    await AdMob.showBanner(options);
+  } catch (error) {
+    console.error('Failed to show banner:', error);
   }
 }
 
