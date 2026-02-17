@@ -1,4 +1,4 @@
-import { Transaction, Category, FinancialGoal, SavingsGoal, UserSettings, DEFAULT_CATEGORIES, IncomeSource, Wallet, WalletTransaction, DEFAULT_WALLETS } from '@/types/finance';
+import { Transaction, Category, FinancialGoal, SavingsGoal, UserSettings, DEFAULT_CATEGORIES, IncomeSource, Wallet, WalletTransaction, DEFAULT_WALLETS, RecurringTransaction } from '@/types/finance';
 
 const STORAGE_KEYS = {
   TRANSACTIONS: 'slx_transactions',
@@ -9,6 +9,8 @@ const STORAGE_KEYS = {
   INCOME_SOURCES: 'slx_income_sources',
   WALLETS: 'slx_wallets',
   WALLET_TRANSACTIONS: 'slx_wallet_transactions',
+  RECURRING_TRANSACTIONS: 'slx_recurring_transactions',
+  LAST_RECURRING_CHECK: 'slx_last_recurring_check',
 };
 
 // Generic storage functions
@@ -239,6 +241,91 @@ export function addWalletTransaction(transaction: WalletTransaction): WalletTran
   return transactions;
 }
 
+// Recurring Transactions
+export function getRecurringTransactions(): RecurringTransaction[] {
+  return getItem(STORAGE_KEYS.RECURRING_TRANSACTIONS, []);
+}
+
+export function saveRecurringTransactions(items: RecurringTransaction[]): void {
+  setItem(STORAGE_KEYS.RECURRING_TRANSACTIONS, items);
+}
+
+export function addRecurringTransaction(item: RecurringTransaction): RecurringTransaction[] {
+  const items = getRecurringTransactions();
+  items.push(item);
+  saveRecurringTransactions(items);
+  return items;
+}
+
+export function updateRecurringTransaction(id: string, updates: Partial<RecurringTransaction>): RecurringTransaction[] {
+  const items = getRecurringTransactions();
+  const index = items.findIndex(i => i.id === id);
+  if (index !== -1) {
+    items[index] = { ...items[index], ...updates };
+    saveRecurringTransactions(items);
+  }
+  return items;
+}
+
+export function deleteRecurringTransaction(id: string): RecurringTransaction[] {
+  const items = getRecurringTransactions().filter(i => i.id !== id);
+  saveRecurringTransactions(items);
+  return items;
+}
+
+/**
+ * Process recurring transactions for the current month.
+ * Creates transactions for active recurring items that haven't been generated yet this month.
+ */
+export function processRecurringTransactions(): Transaction[] {
+  const now = new Date();
+  const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const lastCheck = localStorage.getItem(STORAGE_KEYS.LAST_RECURRING_CHECK);
+  
+  if (lastCheck === currentMonthKey) {
+    return getTransactions(); // Already processed this month
+  }
+
+  const recurring = getRecurringTransactions().filter(r => r.isActive);
+  const existingTransactions = getTransactions();
+  
+  let hasNew = false;
+
+  for (const item of recurring) {
+    // Check if transaction already exists for this recurrence + month
+    const alreadyExists = existingTransactions.some(
+      t => t.recurrenceId === item.id && t.date.startsWith(currentMonthKey)
+    );
+
+    if (!alreadyExists) {
+      const day = Math.min(item.dayOfMonth, 28);
+      const dateStr = `${currentMonthKey}-${String(day).padStart(2, '0')}`;
+      
+      const transaction: Transaction = {
+        id: crypto.randomUUID(),
+        amount: item.amount,
+        type: item.type,
+        categoryId: item.categoryId,
+        description: `${item.description} (Recorrente)`,
+        date: dateStr,
+        createdAt: new Date().toISOString(),
+        isRecurring: true,
+        recurrenceId: item.id,
+      };
+      
+      existingTransactions.unshift(transaction);
+      hasNew = true;
+    }
+  }
+
+  if (hasNew) {
+    saveTransactions(existingTransactions);
+  }
+  
+  localStorage.setItem(STORAGE_KEYS.LAST_RECURRING_CHECK, currentMonthKey);
+  return existingTransactions;
+}
+
 // User Settings
 export function getSettings(): UserSettings {
   return getItem(STORAGE_KEYS.SETTINGS, {
@@ -262,6 +349,7 @@ export function exportAllData(): string {
     incomeSources: getIncomeSources(),
     wallets: getWallets(),
     walletTransactions: getWalletTransactions(),
+    recurringTransactions: getRecurringTransactions(),
     settings: getSettings(),
     exportedAt: new Date().toISOString(),
   };
@@ -278,6 +366,7 @@ export function importAllData(jsonString: string): boolean {
     if (data.incomeSources) saveIncomeSources(data.incomeSources);
     if (data.wallets) saveWallets(data.wallets);
     if (data.walletTransactions) saveWalletTransactions(data.walletTransactions);
+    if (data.recurringTransactions) saveRecurringTransactions(data.recurringTransactions);
     if (data.settings) saveSettings(data.settings);
     return true;
   } catch {
