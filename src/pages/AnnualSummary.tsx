@@ -1,11 +1,13 @@
 import { useState, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Wallet, BarChart3 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Wallet, BarChart3, FileDown } from 'lucide-react';
 import { useFinance } from '@/context/FinanceContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DynamicIcon } from '@/components/finance/DynamicIcon';
-import { parseISO, format, getYear, startOfYear, endOfYear, isWithinInterval } from 'date-fns';
+import { parseISO, format, getYear, startOfYear, endOfYear, isWithinInterval, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { exportAnnualPdf, exportMonthlyPdf } from '@/lib/exportPdf';
+import { useToast } from '@/hooks/use-toast';
 import {
   BarChart,
   Bar,
@@ -18,8 +20,9 @@ import {
 } from 'recharts';
 
 export default function AnnualSummary() {
-  const { transactions, categories, formatCurrency } = useFinance();
+  const { transactions, categories, formatCurrency, settings, monthlyStats, currentMonth } = useFinance();
   const [selectedYear, setSelectedYear] = useState(getYear(new Date()));
+  const { toast } = useToast();
 
   const yearStart = startOfYear(new Date(selectedYear, 0, 1));
   const yearEnd = endOfYear(new Date(selectedYear, 0, 1));
@@ -120,11 +123,54 @@ export default function AnnualSummary() {
             variant="outline"
             size="icon"
             onClick={() => setSelectedYear(y => y + 1)}
-            disabled={false}
           >
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
+      </div>
+
+      {/* Export Buttons */}
+      <div className="mb-6 flex flex-wrap gap-3">
+        <Button
+          variant="outline"
+          onClick={() => {
+            exportAnnualPdf({
+              year: selectedYear,
+              transactions,
+              categories,
+              formatCurrency,
+              currency: settings.currency,
+            });
+            toast({ title: 'PDF exportado!', description: `Relatório anual de ${selectedYear} gerado com sucesso.` });
+          }}
+        >
+          <FileDown className="mr-2 h-4 w-4" />
+          Exportar Anual (PDF)
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => {
+            const monthDate = parseISO(`${currentMonth}-01`);
+            const mStart = startOfMonth(monthDate);
+            const mEnd = endOfMonth(monthDate);
+            const monthTransactions = transactions.filter(t => {
+              const d = parseISO(t.date);
+              return isWithinInterval(d, { start: mStart, end: mEnd });
+            });
+            exportMonthlyPdf({
+              month: currentMonth,
+              transactions: monthTransactions,
+              categories,
+              stats: monthlyStats,
+              formatCurrency,
+              currency: settings.currency,
+            });
+            toast({ title: 'PDF exportado!', description: `Relatório mensal gerado com sucesso.` });
+          }}
+        >
+          <FileDown className="mr-2 h-4 w-4" />
+          Exportar Mês Atual (PDF)
+        </Button>
       </div>
 
       {/* Summary Cards */}

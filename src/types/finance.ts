@@ -19,6 +19,20 @@ export interface Transaction {
   // Optional: link to a savings goal with a contribution amount
   savingsGoalId?: string;
   savingsContribution?: number;
+  // Recurring transaction support
+  isRecurring?: boolean;
+  recurrenceId?: string; // links generated transactions to their template
+}
+
+export interface RecurringTransaction {
+  id: string;
+  amount: number;
+  type: TransactionType;
+  categoryId: string;
+  description: string;
+  dayOfMonth: number; // 1-28
+  isActive: boolean;
+  createdAt: string;
 }
 
 export interface FinancialGoal {

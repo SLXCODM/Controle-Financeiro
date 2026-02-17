@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { Menu, LayoutDashboard, Receipt, FolderOpen, Target, PiggyBank, TrendingUp, Settings, Calendar, Percent } from 'lucide-react';
+import { Menu, LayoutDashboard, Receipt, FolderOpen, Target, PiggyBank, TrendingUp, Settings, Calendar, Percent, Repeat } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -16,6 +16,7 @@ const navItems = [
   { path: '/investments', label: 'Investimentos', icon: TrendingUp },
   { path: '/annual', label: 'Resumo Anual', icon: Calendar },
   { path: '/distribution', label: 'Divisão de Renda', icon: Percent },
+  { path: '/recurring', label: 'Recorrentes', icon: Repeat },
   { path: '/settings', label: 'Configurações', icon: Settings },
 ];
 

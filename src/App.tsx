@@ -15,6 +15,7 @@ import Investments from "./pages/Investments";
 import Settings from "./pages/Settings";
 import AnnualSummary from "./pages/AnnualSummary";
 import IncomeDistribution from "./pages/IncomeDistribution";
+import RecurringTransactions from "./pages/RecurringTransactions";
 import NotFound from "./pages/NotFound";
 import { initializeAdMob } from "@/lib/admob";
 
@@ -42,6 +43,7 @@ const App = () => {
               <Route path="/investments" element={<Investments />} />
               <Route path="/annual" element={<AnnualSummary />} />
               <Route path="/distribution" element={<IncomeDistribution />} />
+              <Route path="/recurring" element={<RecurringTransactions />} />
               <Route path="/settings" element={<Settings />} />
             </Route>
             <Route path="*" element={<NotFound />} />

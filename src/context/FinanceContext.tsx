@@ -9,12 +9,12 @@ import {
   IncomeSource,
   Wallet,
   WalletTransaction,
+  RecurringTransaction,
 } from '@/types/finance';
 import * as storage from '@/lib/storage';
 import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
 
 interface FinanceContextType {
-  // Data
   transactions: Transaction[];
   categories: Category[];
   financialGoals: FinancialGoal[];
@@ -23,50 +23,44 @@ interface FinanceContextType {
   incomeSources: IncomeSource[];
   wallets: Wallet[];
   walletTransactions: WalletTransaction[];
+  recurringTransactions: RecurringTransaction[];
   
-  // Current month filter
   currentMonth: string;
   setCurrentMonth: (month: string) => void;
-  
-  // Computed
   monthlyStats: MonthlyStats;
   
-  // Transaction actions
   addTransaction: (transaction: Omit<Transaction, 'id' | 'createdAt'>) => void;
   updateTransaction: (id: string, updates: Partial<Transaction>) => void;
   deleteTransaction: (id: string) => void;
   
-  // Category actions
   addCategory: (category: Omit<Category, 'id'>) => void;
   updateCategory: (id: string, updates: Partial<Category>) => void;
   deleteCategory: (id: string) => void;
   getCategoryById: (id: string) => Category | undefined;
   
-  // Goal actions
   addFinancialGoal: (goal: Omit<FinancialGoal, 'id'>) => void;
   updateFinancialGoal: (id: string, updates: Partial<FinancialGoal>) => void;
   deleteFinancialGoal: (id: string) => void;
   
-  // Savings goal actions
   addSavingsGoal: (goal: Omit<SavingsGoal, 'id' | 'createdAt'>) => void;
   updateSavingsGoal: (id: string, updates: Partial<SavingsGoal>) => void;
   deleteSavingsGoal: (id: string) => void;
   
-  // Income source actions
   addIncomeSource: (source: Omit<IncomeSource, 'id'>) => void;
   updateIncomeSource: (id: string, updates: Partial<IncomeSource>) => void;
   deleteIncomeSource: (id: string) => void;
   
-  // Wallet actions
   addWallet: (wallet: Omit<Wallet, 'id'>) => void;
   updateWallet: (id: string, updates: Partial<Wallet>) => void;
   deleteWallet: (id: string) => void;
   addWalletTransaction: (transaction: Omit<WalletTransaction, 'id'>) => void;
   
-  // Settings
-  updateSettings: (settings: Partial<UserSettings>) => void;
+  // Recurring
+  addRecurring: (item: Omit<RecurringTransaction, 'id' | 'createdAt'>) => void;
+  updateRecurring: (id: string, updates: Partial<RecurringTransaction>) => void;
+  deleteRecurring: (id: string) => void;
   
-  // Utils
+  updateSettings: (settings: Partial<UserSettings>) => void;
   formatCurrency: (value: number) => string;
   refreshData: () => void;
 }
@@ -83,9 +77,12 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   const [incomeSources, setIncomeSources] = useState<IncomeSource[]>([]);
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [walletTransactions, setWalletTransactions] = useState<WalletTransaction[]>([]);
+  const [recurringTransactions, setRecurringTransactions] = useState<RecurringTransaction[]>([]);
 
   const refreshData = useCallback(() => {
-    setTransactions(storage.getTransactions());
+    // Process recurring transactions first
+    const processedTransactions = storage.processRecurringTransactions();
+    setTransactions(processedTransactions);
     setCategories(storage.getCategories());
     setFinancialGoals(storage.getFinancialGoals());
     setSavingsGoals(storage.getSavingsGoals());
@@ -93,6 +90,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     setIncomeSources(storage.getIncomeSources());
     setWallets(storage.getWallets());
     setWalletTransactions(storage.getWalletTransactions());
+    setRecurringTransactions(storage.getRecurringTransactions());
   }, []);
 
   useEffect(() => {
@@ -103,7 +101,6 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     return categories.find(c => c.id === id);
   }, [categories]);
 
-  // Calculate monthly stats
   const monthlyStats = React.useMemo((): MonthlyStats => {
     const monthDate = parseISO(`${currentMonth}-01`);
     const start = startOfMonth(monthDate);
@@ -114,214 +111,138 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       return isWithinInterval(date, { start, end });
     });
     
-    const totalIncome = monthTransactions
-      .filter(t => t.type === 'income')
-      .reduce((sum, t) => sum + t.amount, 0);
-    
-    const totalExpenses = monthTransactions
-      .filter(t => t.type === 'expense')
-      .reduce((sum, t) => sum + t.amount, 0);
-    
-    const totalInvestments = monthTransactions
-      .filter(t => t.type === 'investment')
-      .reduce((sum, t) => sum + t.amount, 0);
-    
+    const totalIncome = monthTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+    const totalExpenses = monthTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+    const totalInvestments = monthTransactions.filter(t => t.type === 'investment').reduce((sum, t) => sum + t.amount, 0);
     const netProfit = totalIncome - totalExpenses - totalInvestments;
     
-    // Category breakdown for expenses
-    const expensesByCategory = monthTransactions
-      .filter(t => t.type === 'expense')
-      .reduce((acc, t) => {
-        acc[t.categoryId] = (acc[t.categoryId] || 0) + t.amount;
-        return acc;
-      }, {} as Record<string, number>);
+    const expensesByCategory = monthTransactions.filter(t => t.type === 'expense').reduce((acc, t) => {
+      acc[t.categoryId] = (acc[t.categoryId] || 0) + t.amount;
+      return acc;
+    }, {} as Record<string, number>);
     
     const categoryBreakdown = Object.entries(expensesByCategory)
-      .map(([categoryId, amount]) => ({
-        categoryId,
-        amount,
-        percentage: totalExpenses > 0 ? (amount / totalExpenses) * 100 : 0,
-      }))
+      .map(([categoryId, amount]) => ({ categoryId, amount, percentage: totalExpenses > 0 ? (amount / totalExpenses) * 100 : 0 }))
       .sort((a, b) => b.amount - a.amount);
     
-    // Income breakdown by category
-    const incomeByCategory = monthTransactions
-      .filter(t => t.type === 'income')
-      .reduce((acc, t) => {
-        acc[t.categoryId] = (acc[t.categoryId] || 0) + t.amount;
-        return acc;
-      }, {} as Record<string, number>);
+    const incomeByCategory = monthTransactions.filter(t => t.type === 'income').reduce((acc, t) => {
+      acc[t.categoryId] = (acc[t.categoryId] || 0) + t.amount;
+      return acc;
+    }, {} as Record<string, number>);
     
     const incomeBreakdown = Object.entries(incomeByCategory)
-      .map(([categoryId, amount]) => ({
-        categoryId,
-        amount,
-        percentage: totalIncome > 0 ? (amount / totalIncome) * 100 : 0,
-      }))
+      .map(([categoryId, amount]) => ({ categoryId, amount, percentage: totalIncome > 0 ? (amount / totalIncome) * 100 : 0 }))
       .sort((a, b) => b.amount - a.amount);
     
-    return {
-      totalIncome,
-      totalExpenses,
-      totalInvestments,
-      netProfit,
-      categoryBreakdown,
-      incomeBreakdown,
-    };
+    return { totalIncome, totalExpenses, totalInvestments, netProfit, categoryBreakdown, incomeBreakdown };
   }, [transactions, currentMonth]);
 
   const formatCurrency = useCallback((value: number) => {
     if (settings.privacyMode) return '••••••';
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: settings.currency,
-    }).format(value);
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: settings.currency }).format(value);
   }, [settings.currency, settings.privacyMode]);
 
   // Transaction actions
   const addTransactionHandler = useCallback((data: Omit<Transaction, 'id' | 'createdAt'>) => {
-    const transaction: Transaction = {
-      ...data,
-      id: crypto.randomUUID(),
-      createdAt: new Date().toISOString(),
-    };
+    const transaction: Transaction = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
     const updated = storage.addTransaction(transaction);
     setTransactions(updated);
     
-    // If there's a savings contribution, update the savings goal
     if (data.savingsGoalId && data.savingsContribution && data.savingsContribution > 0) {
       const goal = savingsGoals.find(g => g.id === data.savingsGoalId);
       if (goal) {
-        const updatedGoals = storage.updateSavingsGoal(data.savingsGoalId, {
-          currentAmount: goal.currentAmount + data.savingsContribution,
-        });
+        const updatedGoals = storage.updateSavingsGoal(data.savingsGoalId, { currentAmount: goal.currentAmount + data.savingsContribution });
         setSavingsGoals(updatedGoals);
       }
     }
   }, [savingsGoals]);
 
   const updateTransactionHandler = useCallback((id: string, updates: Partial<Transaction>) => {
-    const updated = storage.updateTransaction(id, updates);
-    setTransactions(updated);
+    setTransactions(storage.updateTransaction(id, updates));
   }, []);
 
   const deleteTransactionHandler = useCallback((id: string) => {
-    const updated = storage.deleteTransaction(id);
-    setTransactions(updated);
+    setTransactions(storage.deleteTransaction(id));
   }, []);
 
-  // Category actions
   const addCategoryHandler = useCallback((data: Omit<Category, 'id'>) => {
-    const category: Category = {
-      ...data,
-      id: crypto.randomUUID(),
-    };
-    const updated = storage.addCategory(category);
-    setCategories(updated);
+    setCategories(storage.addCategory({ ...data, id: crypto.randomUUID() }));
   }, []);
 
   const updateCategoryHandler = useCallback((id: string, updates: Partial<Category>) => {
-    const updated = storage.updateCategory(id, updates);
-    setCategories(updated);
+    setCategories(storage.updateCategory(id, updates));
   }, []);
 
   const deleteCategoryHandler = useCallback((id: string) => {
-    const updated = storage.deleteCategory(id);
-    setCategories(updated);
+    setCategories(storage.deleteCategory(id));
   }, []);
 
-  // Financial goal actions
   const addFinancialGoalHandler = useCallback((data: Omit<FinancialGoal, 'id'>) => {
-    const goal: FinancialGoal = {
-      ...data,
-      id: crypto.randomUUID(),
-    };
-    const updated = storage.addFinancialGoal(goal);
-    setFinancialGoals(updated);
+    setFinancialGoals(storage.addFinancialGoal({ ...data, id: crypto.randomUUID() }));
   }, []);
 
   const updateFinancialGoalHandler = useCallback((id: string, updates: Partial<FinancialGoal>) => {
-    const updated = storage.updateFinancialGoal(id, updates);
-    setFinancialGoals(updated);
+    setFinancialGoals(storage.updateFinancialGoal(id, updates));
   }, []);
 
   const deleteFinancialGoalHandler = useCallback((id: string) => {
-    const updated = storage.deleteFinancialGoal(id);
-    setFinancialGoals(updated);
+    setFinancialGoals(storage.deleteFinancialGoal(id));
   }, []);
 
-  // Savings goal actions
   const addSavingsGoalHandler = useCallback((data: Omit<SavingsGoal, 'id' | 'createdAt'>) => {
-    const goal: SavingsGoal = {
-      ...data,
-      id: crypto.randomUUID(),
-      createdAt: new Date().toISOString(),
-    };
-    const updated = storage.addSavingsGoal(goal);
-    setSavingsGoals(updated);
+    setSavingsGoals(storage.addSavingsGoal({ ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString() }));
   }, []);
 
   const updateSavingsGoalHandler = useCallback((id: string, updates: Partial<SavingsGoal>) => {
-    const updated = storage.updateSavingsGoal(id, updates);
-    setSavingsGoals(updated);
+    setSavingsGoals(storage.updateSavingsGoal(id, updates));
   }, []);
 
   const deleteSavingsGoalHandler = useCallback((id: string) => {
-    const updated = storage.deleteSavingsGoal(id);
-    setSavingsGoals(updated);
+    setSavingsGoals(storage.deleteSavingsGoal(id));
   }, []);
 
-  // Income source actions
   const addIncomeSourceHandler = useCallback((data: Omit<IncomeSource, 'id'>) => {
-    const source: IncomeSource = {
-      ...data,
-      id: crypto.randomUUID(),
-    };
-    const updated = storage.addIncomeSource(source);
-    setIncomeSources(updated);
+    setIncomeSources(storage.addIncomeSource({ ...data, id: crypto.randomUUID() }));
   }, []);
 
   const updateIncomeSourceHandler = useCallback((id: string, updates: Partial<IncomeSource>) => {
-    const updated = storage.updateIncomeSource(id, updates);
-    setIncomeSources(updated);
+    setIncomeSources(storage.updateIncomeSource(id, updates));
   }, []);
 
   const deleteIncomeSourceHandler = useCallback((id: string) => {
-    const updated = storage.deleteIncomeSource(id);
-    setIncomeSources(updated);
+    setIncomeSources(storage.deleteIncomeSource(id));
   }, []);
 
-  // Wallet actions
   const addWalletHandler = useCallback((data: Omit<Wallet, 'id'>) => {
-    const wallet: Wallet = {
-      ...data,
-      id: crypto.randomUUID(),
-    };
-    const updated = storage.addWallet(wallet);
-    setWallets(updated);
+    setWallets(storage.addWallet({ ...data, id: crypto.randomUUID() }));
   }, []);
 
   const updateWalletHandler = useCallback((id: string, updates: Partial<Wallet>) => {
-    const updated = storage.updateWallet(id, updates);
-    setWallets(updated);
+    setWallets(storage.updateWallet(id, updates));
   }, []);
 
   const deleteWalletHandler = useCallback((id: string) => {
-    const updated = storage.deleteWallet(id);
-    setWallets(updated);
+    setWallets(storage.deleteWallet(id));
   }, []);
 
-  // Wallet transaction actions
   const addWalletTransactionHandler = useCallback((data: Omit<WalletTransaction, 'id'>) => {
-    const transaction: WalletTransaction = {
-      ...data,
-      id: crypto.randomUUID(),
-    };
-    const updated = storage.addWalletTransaction(transaction);
-    setWalletTransactions(updated);
+    setWalletTransactions(storage.addWalletTransaction({ ...data, id: crypto.randomUUID() }));
   }, []);
 
-  // Settings
+  // Recurring transaction actions
+  const addRecurringHandler = useCallback((data: Omit<RecurringTransaction, 'id' | 'createdAt'>) => {
+    const item: RecurringTransaction = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
+    setRecurringTransactions(storage.addRecurringTransaction(item));
+  }, []);
+
+  const updateRecurringHandler = useCallback((id: string, updates: Partial<RecurringTransaction>) => {
+    setRecurringTransactions(storage.updateRecurringTransaction(id, updates));
+  }, []);
+
+  const deleteRecurringHandler = useCallback((id: string) => {
+    setRecurringTransactions(storage.deleteRecurringTransaction(id));
+  }, []);
+
   const updateSettingsHandler = useCallback((updates: Partial<UserSettings>) => {
     const updated = { ...settings, ...updates };
     storage.saveSettings(updated);
@@ -331,40 +252,17 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   return (
     <FinanceContext.Provider
       value={{
-        transactions,
-        categories,
-        financialGoals,
-        savingsGoals,
-        settings,
-        currentMonth,
-        setCurrentMonth,
-        monthlyStats,
-        incomeSources,
-        wallets,
-        walletTransactions,
-        addTransaction: addTransactionHandler,
-        updateTransaction: updateTransactionHandler,
-        deleteTransaction: deleteTransactionHandler,
-        addCategory: addCategoryHandler,
-        updateCategory: updateCategoryHandler,
-        deleteCategory: deleteCategoryHandler,
-        getCategoryById,
-        addFinancialGoal: addFinancialGoalHandler,
-        updateFinancialGoal: updateFinancialGoalHandler,
-        deleteFinancialGoal: deleteFinancialGoalHandler,
-        addSavingsGoal: addSavingsGoalHandler,
-        updateSavingsGoal: updateSavingsGoalHandler,
-        deleteSavingsGoal: deleteSavingsGoalHandler,
-        addIncomeSource: addIncomeSourceHandler,
-        updateIncomeSource: updateIncomeSourceHandler,
-        deleteIncomeSource: deleteIncomeSourceHandler,
-        addWallet: addWalletHandler,
-        updateWallet: updateWalletHandler,
-        deleteWallet: deleteWalletHandler,
+        transactions, categories, financialGoals, savingsGoals, settings, currentMonth, setCurrentMonth,
+        monthlyStats, incomeSources, wallets, walletTransactions, recurringTransactions,
+        addTransaction: addTransactionHandler, updateTransaction: updateTransactionHandler, deleteTransaction: deleteTransactionHandler,
+        addCategory: addCategoryHandler, updateCategory: updateCategoryHandler, deleteCategory: deleteCategoryHandler, getCategoryById,
+        addFinancialGoal: addFinancialGoalHandler, updateFinancialGoal: updateFinancialGoalHandler, deleteFinancialGoal: deleteFinancialGoalHandler,
+        addSavingsGoal: addSavingsGoalHandler, updateSavingsGoal: updateSavingsGoalHandler, deleteSavingsGoal: deleteSavingsGoalHandler,
+        addIncomeSource: addIncomeSourceHandler, updateIncomeSource: updateIncomeSourceHandler, deleteIncomeSource: deleteIncomeSourceHandler,
+        addWallet: addWalletHandler, updateWallet: updateWalletHandler, deleteWallet: deleteWalletHandler,
         addWalletTransaction: addWalletTransactionHandler,
-        updateSettings: updateSettingsHandler,
-        formatCurrency,
-        refreshData,
+        addRecurring: addRecurringHandler, updateRecurring: updateRecurringHandler, deleteRecurring: deleteRecurringHandler,
+        updateSettings: updateSettingsHandler, formatCurrency, refreshData,
       }}
     >
       {children}

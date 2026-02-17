@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useFinance } from '@/context/FinanceContext';
 import { TransactionType } from '@/types/finance';
 import {
@@ -23,6 +23,7 @@ import { CurrencyInput } from './CurrencyInput';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Target } from 'lucide-react';
+import { showRewardedAd } from '@/lib/admob';
 
 interface AddTransactionDialogProps {
   open: boolean;
@@ -51,7 +52,7 @@ export function AddTransactionDialog({ open, onOpenChange }: AddTransactionDialo
   
   const filteredCategories = categories.filter(c => c.type === type);
   
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!amount || !categoryId) return;
@@ -59,7 +60,6 @@ export function AddTransactionDialog({ open, onOpenChange }: AddTransactionDialo
     const parsedAmount = parseFloat(amount);
     const parsedContribution = linkToGoal && goalContribution ? parseFloat(goalContribution) : 0;
     
-    // Validate contribution doesn't exceed amount
     if (parsedContribution > parsedAmount) {
       alert('A contribuição para a meta não pode ser maior que o valor da entrada');
       return;
@@ -84,6 +84,9 @@ export function AddTransactionDialog({ open, onOpenChange }: AddTransactionDialo
     setSelectedGoalId('');
     setGoalContribution('');
     onOpenChange(false);
+
+    // Show rewarded ad after completing transaction
+    showRewardedAd();
   };
 
   const selectedGoal = savingsGoals.find(g => g.id === selectedGoalId);
