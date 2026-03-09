@@ -14,7 +14,300 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      categories: {
+        Row: {
+          color: string
+          created_at: string
+          icon: string
+          id: string
+          is_default: boolean
+          name: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          icon?: string
+          id?: string
+          is_default?: boolean
+          name: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          icon?: string
+          id?: string
+          is_default?: boolean
+          name?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      financial_goals: {
+        Row: {
+          category_id: string
+          created_at: string
+          id: string
+          month: string
+          monthly_limit: number
+          user_id: string
+        }
+        Insert: {
+          category_id: string
+          created_at?: string
+          id?: string
+          month: string
+          monthly_limit: number
+          user_id: string
+        }
+        Update: {
+          category_id?: string
+          created_at?: string
+          id?: string
+          month?: string
+          monthly_limit?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      income_sources: {
+        Row: {
+          created_at: string
+          distributions: Json
+          id: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          distributions?: Json
+          id?: string
+          name: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          distributions?: Json
+          id?: string
+          name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      recurring_transactions: {
+        Row: {
+          amount: number
+          category_id: string
+          created_at: string
+          day_of_month: number
+          description: string
+          id: string
+          is_active: boolean
+          type: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          category_id: string
+          created_at?: string
+          day_of_month: number
+          description?: string
+          id?: string
+          is_active?: boolean
+          type: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          category_id?: string
+          created_at?: string
+          day_of_month?: number
+          description?: string
+          id?: string
+          is_active?: boolean
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      savings_goals: {
+        Row: {
+          created_at: string
+          current_amount: number
+          deadline: string | null
+          id: string
+          name: string
+          target_amount: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_amount?: number
+          deadline?: string | null
+          id?: string
+          name: string
+          target_amount: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          current_amount?: number
+          deadline?: string | null
+          id?: string
+          name?: string
+          target_amount?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      transactions: {
+        Row: {
+          amount: number
+          category_id: string
+          created_at: string
+          date: string
+          description: string
+          id: string
+          is_recurring: boolean | null
+          recurrence_id: string | null
+          savings_contribution: number | null
+          savings_goal_id: string | null
+          type: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          category_id: string
+          created_at?: string
+          date?: string
+          description?: string
+          id?: string
+          is_recurring?: boolean | null
+          recurrence_id?: string | null
+          savings_contribution?: number | null
+          savings_goal_id?: string | null
+          type: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          category_id?: string
+          created_at?: string
+          date?: string
+          description?: string
+          id?: string
+          is_recurring?: boolean | null
+          recurrence_id?: string | null
+          savings_contribution?: number | null
+          savings_goal_id?: string | null
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_settings: {
+        Row: {
+          created_at: string
+          currency: string
+          display_name: string
+          id: string
+          privacy_mode: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          currency?: string
+          display_name?: string
+          id?: string
+          privacy_mode?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          currency?: string
+          display_name?: string
+          id?: string
+          privacy_mode?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      wallet_transactions: {
+        Row: {
+          amount: number
+          created_at: string
+          date: string
+          description: string
+          id: string
+          linked_transaction_id: string | null
+          type: string
+          user_id: string
+          wallet_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          date?: string
+          description?: string
+          id?: string
+          linked_transaction_id?: string | null
+          type: string
+          user_id: string
+          wallet_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          date?: string
+          description?: string
+          id?: string
+          linked_transaction_id?: string | null
+          type?: string
+          user_id?: string
+          wallet_id?: string
+        }
+        Relationships: []
+      }
+      wallets: {
+        Row: {
+          balance: number
+          color: string
+          created_at: string
+          icon: string
+          id: string
+          is_default: boolean
+          name: string
+          user_id: string
+        }
+        Insert: {
+          balance?: number
+          color?: string
+          created_at?: string
+          icon?: string
+          id?: string
+          is_default?: boolean
+          name: string
+          user_id: string
+        }
+        Update: {
+          balance?: number
+          color?: string
+          created_at?: string
+          icon?: string
+          id?: string
+          is_default?: boolean
+          name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
