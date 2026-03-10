@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { lovable } from '@/integrations/lovable';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { Capacitor } from '@capacitor/core';
 
 export default function Login() {
   const [loading, setLoading] = useState(false);
@@ -13,16 +14,22 @@ export default function Login() {
   const handleGoogleLogin = async () => {
     setLoading(true);
     try {
-      const isCustomDomainOrApp =
+      const isNativeApp = Capacitor.isNativePlatform();
+      const isCustomDomain =
         !window.location.hostname.includes('lovable.app') &&
         !window.location.hostname.includes('lovableproject.com');
 
-      if (isCustomDomainOrApp) {
-        // APK or custom domain: bypass auth-bridge
+      if (isNativeApp || isCustomDomain) {
+        // APK/native app or custom domain: bypass auth-bridge
+        // Use the project's actual Supabase URL as redirect base for native apps
+        const redirectUrl = isNativeApp
+          ? `${import.meta.env.VITE_SUPABASE_URL}/auth/v1/callback`
+          : `${window.location.origin}/`;
+
         const { data, error } = await supabase.auth.signInWithOAuth({
           provider: 'google',
           options: {
-            redirectTo: `${window.location.origin}/`,
+            redirectTo: window.location.origin + '/',
             skipBrowserRedirect: true,
           },
         });
