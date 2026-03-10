@@ -3,6 +3,7 @@ import { LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { lovable } from '@/integrations/lovable';
+import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
 export default function Login() {
@@ -12,15 +13,37 @@ export default function Login() {
   const handleGoogleLogin = async () => {
     setLoading(true);
     try {
-      const result = await lovable.auth.signInWithOAuth('google', {
-        redirect_uri: window.location.origin,
-      });
-      if (result.error) {
-        toast({
-          title: 'Erro ao fazer login',
-          description: 'Não foi possível conectar com o Google.',
-          variant: 'destructive',
+      const isCustomDomainOrApp =
+        !window.location.hostname.includes('lovable.app') &&
+        !window.location.hostname.includes('lovableproject.com');
+
+      if (isCustomDomainOrApp) {
+        // APK or custom domain: bypass auth-bridge
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: `${window.location.origin}/`,
+            skipBrowserRedirect: true,
+          },
         });
+
+        if (error) throw error;
+
+        if (data?.url) {
+          window.location.href = data.url;
+        }
+      } else {
+        // Lovable preview: use managed OAuth
+        const result = await lovable.auth.signInWithOAuth('google', {
+          redirect_uri: window.location.origin,
+        });
+        if (result.error) {
+          toast({
+            title: 'Erro ao fazer login',
+            description: 'Não foi possível conectar com o Google.',
+            variant: 'destructive',
+          });
+        }
       }
     } catch (error) {
       console.error('Login error:', error);
