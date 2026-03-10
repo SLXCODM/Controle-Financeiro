@@ -14,18 +14,13 @@ export default function Login() {
   const handleGoogleLogin = async () => {
     setLoading(true);
     try {
-      const isNativeApp = Capacitor.isNativePlatform();
+      // Check if we're on a truly custom domain (not lovable preview/project domains)
       const isCustomDomain =
         !window.location.hostname.includes('lovable.app') &&
         !window.location.hostname.includes('lovableproject.com');
 
-      if (isNativeApp || isCustomDomain) {
-        // APK/native app or custom domain: bypass auth-bridge
-        // Use the project's actual Supabase URL as redirect base for native apps
-        const redirectUrl = isNativeApp
-          ? `${import.meta.env.VITE_SUPABASE_URL}/auth/v1/callback`
-          : `${window.location.origin}/`;
-
+      if (isCustomDomain) {
+        // Custom domain: bypass auth-bridge, use Supabase directly
         const { data, error } = await supabase.auth.signInWithOAuth({
           provider: 'google',
           options: {
@@ -40,7 +35,7 @@ export default function Login() {
           window.location.href = data.url;
         }
       } else {
-        // Lovable preview: use managed OAuth
+        // Lovable domains (including APK served from lovableproject.com): use managed OAuth
         const result = await lovable.auth.signInWithOAuth('google', {
           redirect_uri: window.location.origin,
         });
