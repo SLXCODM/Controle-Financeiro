@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import { Capacitor } from '@capacitor/core';
 
 interface AuthContextType {
   user: User | null;
@@ -23,29 +22,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(session?.user ?? null);
       setLoading(false);
     });
-
-    // On native apps, check if returning from OAuth with tokens in the URL
-    if (Capacitor.isNativePlatform()) {
-      const hash = window.location.hash;
-      if (hash && hash.includes('access_token')) {
-        const params = new URLSearchParams(hash.substring(1));
-        const accessToken = params.get('access_token');
-        const refreshToken = params.get('refresh_token');
-        if (accessToken && refreshToken) {
-          supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken,
-          }).then(({ data }) => {
-            setSession(data.session);
-            setUser(data.session?.user ?? null);
-            setLoading(false);
-            // Clean up the URL hash
-            window.location.hash = '';
-          });
-          return () => subscription.unsubscribe();
-        }
-      }
-    }
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);

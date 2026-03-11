@@ -1,53 +1,78 @@
 import { useState } from 'react';
-import { LogIn } from 'lucide-react';
+import { LogIn, UserPlus, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Capacitor } from '@capacitor/core';
 
 export default function Login() {
   const [loading, setLoading] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const { toast } = useToast();
 
-  const handleGoogleLogin = async () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !password) return;
+
+    if (isSignUp && password !== confirmPassword) {
+      toast({
+        title: 'Erro',
+        description: 'As senhas não coincidem.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (isSignUp && password.length < 6) {
+      toast({
+        title: 'Erro',
+        description: 'A senha deve ter pelo menos 6 caracteres.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setLoading(true);
     try {
-      if (Capacitor.isNativePlatform()) {
-        // APK: use Supabase OAuth directly to keep flow inside the webview
-        const { data, error } = await supabase.auth.signInWithOAuth({
-          provider: 'google',
+      if (isSignUp) {
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
           options: {
-            redirectTo: window.location.origin + '/',
-            skipBrowserRedirect: true,
+            emailRedirectTo: window.location.origin,
           },
         });
-
         if (error) throw error;
-
-        if (data?.url) {
-          // Navigate inside the webview (don't open external browser)
-          window.location.href = data.url;
-        }
-      } else {
-        // Web (Lovable preview, custom domains): use managed OAuth
-        const { lovable } = await import('@/integrations/lovable');
-        const result = await lovable.auth.signInWithOAuth('google', {
-          redirect_uri: window.location.origin,
+        toast({
+          title: 'Conta criada!',
+          description: 'Verifique seu e-mail para confirmar o cadastro.',
         });
-        if (result.error) {
-          toast({
-            title: 'Erro ao fazer login',
-            description: 'Não foi possível conectar com o Google.',
-            variant: 'destructive',
-          });
-        }
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (error) throw error;
       }
-    } catch (error) {
-      console.error('Login error:', error);
+    } catch (error: any) {
+      console.error('Auth error:', error);
+      let message = 'Tente novamente mais tarde.';
+      if (error.message?.includes('Invalid login credentials')) {
+        message = 'E-mail ou senha incorretos.';
+      } else if (error.message?.includes('User already registered')) {
+        message = 'Este e-mail já está cadastrado. Faça login.';
+      } else if (error.message?.includes('Email not confirmed')) {
+        message = 'Confirme seu e-mail antes de fazer login.';
+      }
       toast({
-        title: 'Erro ao fazer login',
-        description: 'Tente novamente mais tarde.',
+        title: isSignUp ? 'Erro ao criar conta' : 'Erro ao fazer login',
+        description: message,
         variant: 'destructive',
       });
     } finally {
@@ -63,24 +88,105 @@ export default function Login() {
             <h1 className="gradient-text text-3xl font-bold">SLX Finance</h1>
             <p className="text-sm text-muted-foreground">Controle Financeiro Inteligente</p>
           </div>
-          <CardTitle className="text-lg">Bem-vindo!</CardTitle>
+          <CardTitle className="text-lg">
+            {isSignUp ? 'Criar conta' : 'Bem-vindo!'}
+          </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-center text-sm text-muted-foreground">
-            Faça login para sincronizar seus dados na nuvem e nunca perder suas informações.
-          </p>
-          <Button
-            onClick={handleGoogleLogin}
-            disabled={loading}
-            className="w-full gap-2"
-            size="lg"
-          >
-            <LogIn className="h-5 w-5" />
-            {loading ? 'Conectando...' : 'Entrar com Google'}
-          </Button>
-          <p className="text-center text-xs text-muted-foreground">
-            Seus dados ficam seguros e sincronizados automaticamente.
-          </p>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-foreground">E-mail</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="seu@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="pl-10"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="password" className="text-foreground">Senha</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="pl-10 pr-10"
+                  required
+                  minLength={6}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+
+            {isSignUp && (
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword" className="text-foreground">Confirmar senha</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="confirmPassword"
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="••••••"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="pl-10"
+                    required
+                    minLength={6}
+                  />
+                </div>
+              </div>
+            )}
+
+            <Button
+              type="submit"
+              disabled={loading}
+              className="w-full gap-2"
+              size="lg"
+            >
+              {isSignUp ? (
+                <>
+                  <UserPlus className="h-5 w-5" />
+                  {loading ? 'Criando conta...' : 'Criar conta'}
+                </>
+              ) : (
+                <>
+                  <LogIn className="h-5 w-5" />
+                  {loading ? 'Entrando...' : 'Entrar'}
+                </>
+              )}
+            </Button>
+
+            <p className="text-center text-sm text-muted-foreground">
+              {isSignUp ? 'Já tem uma conta?' : 'Não tem uma conta?'}{' '}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSignUp(!isSignUp);
+                  setPassword('');
+                  setConfirmPassword('');
+                }}
+                className="text-primary underline hover:text-primary/80"
+              >
+                {isSignUp ? 'Fazer login' : 'Criar conta'}
+              </button>
+            </p>
+          </form>
         </CardContent>
       </Card>
     </div>
