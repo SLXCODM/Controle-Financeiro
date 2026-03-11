@@ -2,10 +2,9 @@ import { useState } from 'react';
 import { LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { lovable } from '@/integrations/lovable';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-
+import { Capacitor } from '@capacitor/core';
 
 export default function Login() {
   const [loading, setLoading] = useState(false);
@@ -14,13 +13,8 @@ export default function Login() {
   const handleGoogleLogin = async () => {
     setLoading(true);
     try {
-      // Check if we're on a truly custom domain (not lovable preview/project domains)
-      const isCustomDomain =
-        !window.location.hostname.includes('lovable.app') &&
-        !window.location.hostname.includes('lovableproject.com');
-
-      if (isCustomDomain) {
-        // Custom domain: bypass auth-bridge, use Supabase directly
+      if (Capacitor.isNativePlatform()) {
+        // APK: use Supabase OAuth directly to keep flow inside the webview
         const { data, error } = await supabase.auth.signInWithOAuth({
           provider: 'google',
           options: {
@@ -32,10 +26,12 @@ export default function Login() {
         if (error) throw error;
 
         if (data?.url) {
+          // Navigate inside the webview (don't open external browser)
           window.location.href = data.url;
         }
       } else {
-        // Lovable domains (including APK served from lovableproject.com): use managed OAuth
+        // Web (Lovable preview, custom domains): use managed OAuth
+        const { lovable } = await import('@/integrations/lovable');
         const result = await lovable.auth.signInWithOAuth('google', {
           redirect_uri: window.location.origin,
         });
