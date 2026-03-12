@@ -1,9 +1,5 @@
 {
   "appId": "app.lovable.bc1066416b194ef28ac20032e68201cb",
   "appName": "SLX Finance",
-  "webDir": "dist",
-  "server": {
-    "url": "https://bc106641-6b19-4ef2-8ac2-0032e68201cb.lovableproject.com?forceHideBadge=true",
-    "cleartext": true
-  }
+  "webDir": "dist"
 }
