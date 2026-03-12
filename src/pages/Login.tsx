@@ -41,18 +41,25 @@ export default function Login() {
     setLoading(true);
     try {
       if (isSignUp) {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
-          options: {
-            emailRedirectTo: window.location.origin,
-          },
         });
+
         if (error) throw error;
+
         toast({
           title: 'Conta criada!',
-          description: 'Verifique seu e-mail para confirmar o cadastro.',
+          description: data.session
+            ? 'Cadastro concluído. Entrando na sua conta...'
+            : 'Cadastro concluído. Faça login com e-mail e senha.',
         });
+
+        if (!data.session) {
+          setIsSignUp(false);
+          setPassword('');
+          setConfirmPassword('');
+        }
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email,
