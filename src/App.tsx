@@ -72,7 +72,11 @@ function AppRoutes() {
 
 const App = () => {
   useEffect(() => {
-    initializeAdMob();
+    try {
+      initializeAdMob();
+    } catch (e) {
+      console.error('Failed to init AdMob:', e);
+    }
   }, []);
 
   return (

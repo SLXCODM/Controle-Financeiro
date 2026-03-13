@@ -14,9 +14,21 @@ let lastInterstitialTime = 0;
 const MIN_INTERSTITIAL_INTERVAL_MS = 60000; // Minimum 60s between interstitials
 
 export async function initializeAdMob(): Promise<void> {
-  if (!Capacitor.isNativePlatform() || isInitialized) return;
+  if (isInitialized) return;
+  
+  // Only run on native platforms
+  if (!Capacitor.isNativePlatform()) {
+    console.log('AdMob: Not a native platform, skipping initialization');
+    return;
+  }
 
   try {
+    // Check if the plugin is actually available
+    if (!AdMob || typeof AdMob.initialize !== 'function') {
+      console.warn('AdMob plugin not available');
+      return;
+    }
+
     await AdMob.initialize({
       initializeForTesting: false,
     });
@@ -29,13 +41,11 @@ export async function initializeAdMob(): Promise<void> {
 
     AdMob.addListener(InterstitialAdPluginEvents.Dismissed, () => {
       isInterstitialLoaded = false;
-      // Delay re-preparation to avoid rapid loading
       setTimeout(() => prepareInterstitial(), 3000);
     });
 
     AdMob.addListener(InterstitialAdPluginEvents.FailedToLoad, () => {
       isInterstitialLoaded = false;
-      // Retry after delay on failure
       setTimeout(() => prepareInterstitial(), 15000);
     });
 
@@ -59,6 +69,8 @@ export async function initializeAdMob(): Promise<void> {
     await showBanner();
   } catch (error) {
     console.error('AdMob initialization error:', error);
+    // Don't crash the app if AdMob fails
+    isInitialized = false;
   }
 }
 
