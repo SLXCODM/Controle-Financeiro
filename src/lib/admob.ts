@@ -66,7 +66,6 @@ export async function initializeAdMob(): Promise<void> {
 
     await prepareInterstitial();
     await prepareRewarded();
-    await showBanner();
   } catch (error) {
     console.error('AdMob initialization error:', error);
     // Don't crash the app if AdMob fails

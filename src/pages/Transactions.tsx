@@ -112,7 +112,7 @@ export default function Transactions() {
 
       {/* FAB - elevated to stay above AdMob banner */}
       <Button
-        className="fab fixed bottom-32 right-6 h-14 w-14 rounded-full p-0 lg:bottom-24 lg:right-8 z-50"
+        className="fab fixed bottom-6 right-6 h-14 w-14 rounded-full p-0 lg:bottom-8 lg:right-8"
         onClick={() => setAddDialogOpen(true)}
       >
         <Plus className="h-6 w-6" />
