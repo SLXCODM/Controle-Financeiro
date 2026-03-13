@@ -140,14 +140,51 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     if (!user) return;
     const transaction: Transaction = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
     await db.addTransaction(transaction, user.id);
+
+    // Savings goal contribution
     if (data.savingsGoalId && data.savingsContribution && data.savingsContribution > 0) {
       const goal = savingsGoals.find(g => g.id === data.savingsGoalId);
       if (goal) {
         await db.updateSavingsGoal(data.savingsGoalId, { currentAmount: goal.currentAmount + data.savingsContribution });
       }
     }
+
+    // Auto-distribute income to wallets based on income sources
+    if (data.type === 'income') {
+      const category = categories.find(c => c.id === data.categoryId);
+      if (category) {
+        // Match income source by name (case-insensitive)
+        const matchedSource = incomeSources.find(
+          s => s.name.toLowerCase().trim() === category.name.toLowerCase().trim()
+        );
+        if (matchedSource && matchedSource.distributions.length > 0) {
+          for (const dist of matchedSource.distributions) {
+            if (dist.percentage > 0) {
+              const creditAmount = (data.amount * dist.percentage) / 100;
+              const walletTx: WalletTransaction = {
+                id: crypto.randomUUID(),
+                walletId: dist.walletId,
+                amount: creditAmount,
+                type: 'credit',
+                description: `${category.name} - distribuição automática`,
+                date: data.date,
+                linkedTransactionId: transaction.id,
+              };
+              await db.addWalletTransaction(walletTx, user.id);
+
+              // Update wallet balance
+              const wallet = wallets.find(w => w.id === dist.walletId);
+              if (wallet) {
+                await db.updateWallet(dist.walletId, { balance: wallet.balance + creditAmount });
+              }
+            }
+          }
+        }
+      }
+    }
+
     refreshData();
-  }, [user, savingsGoals, refreshData]);
+  }, [user, savingsGoals, categories, incomeSources, wallets, refreshData]);
 
   const updateTransactionHandler = useCallback(async (id: string, updates: Partial<Transaction>) => {
     await db.updateTransaction(id, updates);
