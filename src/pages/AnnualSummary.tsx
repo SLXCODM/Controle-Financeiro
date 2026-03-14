@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Wallet, BarChart3, FileDown } from 'lucide-react';
+import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Wallet, BarChart3, FileDown, Calendar } from 'lucide-react';
 import { useFinance } from '@/context/FinanceContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,8 +20,9 @@ import {
 } from 'recharts';
 
 export default function AnnualSummary() {
-  const { transactions, categories, formatCurrency, settings, monthlyStats, currentMonth } = useFinance();
+  const { transactions, categories, formatCurrency, settings, currentMonth } = useFinance();
   const [selectedYear, setSelectedYear] = useState(getYear(new Date()));
+  const [selectedMonthForExport, setSelectedMonthForExport] = useState(currentMonth);
   const { toast } = useToast();
 
   const yearStart = startOfYear(new Date(selectedYear, 0, 1));
@@ -102,6 +103,61 @@ export default function AnnualSummary() {
     return months;
   }, [yearTransactions, selectedYear]);
 
+  const handleExportMonthly = async () => {
+    const monthDate = parseISO(`${selectedMonthForExport}-01`);
+    const mStart = startOfMonth(monthDate);
+    const mEnd = endOfMonth(monthDate);
+    
+    const monthTransactions = transactions.filter(t => {
+      const d = parseISO(t.date);
+      return isWithinInterval(d, { start: mStart, end: mEnd });
+    });
+
+    const totalIncome = monthTransactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+    const totalExpenses = monthTransactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+    const totalInvestments = monthTransactions.filter(t => t.type === 'investment').reduce((s, t) => s + t.amount, 0);
+
+    const categoryMap: Record<string, number> = {};
+    monthTransactions.filter(t => t.type === 'expense').forEach(t => {
+      categoryMap[t.categoryId] = (categoryMap[t.categoryId] || 0) + t.amount;
+    });
+
+    const categoryBreakdown = Object.entries(categoryMap).map(([categoryId, amount]) => ({
+      categoryId,
+      amount,
+      percentage: totalExpenses > 0 ? (amount / totalExpenses) * 100 : 0
+    })).sort((a, b) => b.amount - a.amount);
+
+    const incomeMap: Record<string, number> = {};
+    monthTransactions.filter(t => t.type === 'income').forEach(t => {
+      incomeMap[t.categoryId] = (incomeMap[t.categoryId] || 0) + t.amount;
+    });
+
+    const incomeBreakdown = Object.entries(incomeMap).map(([categoryId, amount]) => ({
+      categoryId,
+      amount,
+      percentage: totalIncome > 0 ? (amount / totalIncome) * 100 : 0
+    })).sort((a, b) => b.amount - a.amount);
+
+    await exportMonthlyPdf({
+      month: selectedMonthForExport,
+      transactions: monthTransactions,
+      categories,
+      stats: {
+        totalIncome,
+        totalExpenses,
+        totalInvestments,
+        netProfit: totalIncome - totalExpenses - totalInvestments,
+        categoryBreakdown,
+        incomeBreakdown
+      },
+      formatCurrency,
+      currency: settings.currency,
+    });
+    
+    toast({ title: 'PDF exportado!', description: `Relatório de ${format(monthDate, 'MMMM/yyyy', { locale: ptBR })} gerado.` });
+  };
+
   return (
     <div className="safe-top safe-bottom min-h-full p-4 pb-24 lg:p-6">
       {/* Header with Year Selector */}
@@ -129,49 +185,54 @@ export default function AnnualSummary() {
         </div>
       </div>
 
-      {/* Export Buttons */}
-      <div className="mb-6 flex flex-wrap gap-3">
-        <Button
-          variant="outline"
-          onClick={() => {
-            exportAnnualPdf({
-              year: selectedYear,
-              transactions,
-              categories,
-              formatCurrency,
-              currency: settings.currency,
-            });
-            toast({ title: 'PDF exportado!', description: `Relatório anual de ${selectedYear} gerado com sucesso.` });
-          }}
-        >
-          <FileDown className="mr-2 h-4 w-4" />
-          Exportar Anual (PDF)
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => {
-            const monthDate = parseISO(`${currentMonth}-01`);
-            const mStart = startOfMonth(monthDate);
-            const mEnd = endOfMonth(monthDate);
-            const monthTransactions = transactions.filter(t => {
-              const d = parseISO(t.date);
-              return isWithinInterval(d, { start: mStart, end: mEnd });
-            });
-            exportMonthlyPdf({
-              month: currentMonth,
-              transactions: monthTransactions,
-              categories,
-              stats: monthlyStats,
-              formatCurrency,
-              currency: settings.currency,
-            });
-            toast({ title: 'PDF exportado!', description: `Relatório mensal gerado com sucesso.` });
-          }}
-        >
-          <FileDown className="mr-2 h-4 w-4" />
-          Exportar Mês Atual (PDF)
-        </Button>
-      </div>
+      {/* Export Section */}
+      <Card className="mb-6 border-purple-100 bg-purple-50/30">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-lg text-purple-800">
+            <FileDown className="h-5 w-5" />
+            Exportar Relatórios
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-end gap-4">
+          <div className="flex flex-col gap-2">
+            <label className="text-xs font-medium text-purple-700">Selecionar Mês</label>
+            <div className="flex items-center gap-2 rounded-md border border-purple-200 bg-white p-1">
+              <Calendar className="ml-2 h-4 w-4 text-purple-500" />
+              <input 
+                type="month" 
+                value={selectedMonthForExport}
+                onChange={(e) => setSelectedMonthForExport(e.target.value)}
+                className="bg-transparent p-1 text-sm outline-none"
+              />
+            </div>
+          </div>
+          
+          <div className="flex flex-wrap gap-2">
+            <Button 
+              onClick={handleExportMonthly}
+              className="bg-purple-600 hover:bg-purple-700"
+            >
+              Exportar Mês (PDF)
+            </Button>
+            <Button 
+              variant="outline"
+              onClick={async () => {
+                await exportAnnualPdf({
+                  year: selectedYear,
+                  transactions,
+                  categories,
+                  formatCurrency,
+                  currency: settings.currency,
+                });
+                toast({ title: 'PDF exportado!', description: `Relatório anual de ${selectedYear} gerado.` });
+              }}
+              className="border-purple-200 text-purple-700 hover:bg-purple-100"
+            >
+              Exportar Ano {selectedYear}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Summary Cards */}
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

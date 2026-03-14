@@ -1,5 +1,7 @@
 import { jsPDF } from 'jspdf';
 import { Transaction, Category, MonthlyStats } from '@/types/finance';
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 
 interface ExportMonthlyPdfParams {
   month: string; // YYYY-MM
@@ -16,6 +18,28 @@ interface ExportAnnualPdfParams {
   categories: Category[];
   formatCurrency: (v: number) => string;
   currency: string;
+}
+
+async function saveAndSharePdf(pdf: jsPDF, fileName: string) {
+  try {
+    const pdfBase64 = pdf.output('datauristring').split(',')[1];
+    const savedFile = await Filesystem.writeFile({
+      path: fileName,
+      data: pdfBase64,
+      directory: Directory.Cache
+    });
+
+    await Share.share({
+      title: 'Exportar Relatório SLX',
+      text: `Aqui está o seu relatório financeiro: ${fileName}`,
+      url: savedFile.uri,
+      dialogTitle: 'Compartilhar Relatório'
+    });
+  } catch (error) {
+    console.error('Erro ao compartilhar PDF:', error);
+    // Fallback para download em navegador se falhar (útil para testes)
+    pdf.save(fileName);
+  }
 }
 
 function addHeader(pdf: jsPDF, title: string, subtitle: string, y: number): number {
@@ -50,7 +74,48 @@ function addStatRow(pdf: jsPDF, label: string, value: string, y: number, color?:
   return y + 7;
 }
 
-export function exportMonthlyPdf({ month, transactions, categories, stats, formatCurrency }: ExportMonthlyPdfParams) {
+function drawCategoryChart(pdf: jsPDF, breakdown: any[], categories: Category[], y: number, total: number): number {
+  if (breakdown.length === 0) return y;
+  
+  const centerX = 50;
+  const centerY = y + 35;
+  const radius = 25;
+  
+  pdf.setFontSize(12);
+  pdf.setTextColor(106, 27, 154);
+  pdf.text("Distribuição Visual", 15, y + 5);
+
+  // Desenhar Legenda e Simular Gráfico
+  let currentY = y + 15;
+  const colors: [number, number, number][] = [
+    [106, 27, 154], [156, 39, 176], [186, 104, 200], 
+    [225, 190, 231], [74, 20, 140], [123, 31, 162]
+  ];
+
+  breakdown.slice(0, 6).forEach((item, index) => {
+    const cat = categories.find(c => c.id === item.categoryId);
+    const color = colors[index % colors.length];
+    
+    pdf.setFillColor(color[0], color[1], color[2]);
+    pdf.rect(100, currentY, 4, 4, 'F');
+    pdf.setFontSize(9);
+    pdf.setTextColor(60, 60, 60);
+    pdf.text(`${cat?.name || 'Outros'}: ${item.percentage.toFixed(1)}%`, 106, currentY + 3.5);
+    currentY += 7;
+  });
+
+  // Círculo Decorativo (Gráfico Simulado)
+  pdf.setDrawColor(106, 27, 154);
+  pdf.setLineWidth(0.5);
+  pdf.circle(centerX, centerY, radius, 'D');
+  pdf.setFontSize(10);
+  pdf.text("Gráfico de", centerX, centerY - 2, { align: 'center' });
+  pdf.text("Gastos", centerX, centerY + 4, { align: 'center' });
+
+  return Math.max(currentY, centerY + radius) + 10;
+}
+
+export async function exportMonthlyPdf({ month, transactions, categories, stats, formatCurrency }: ExportMonthlyPdfParams) {
   const pdf = new jsPDF();
   const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
   const [yearStr, monthStr] = month.split('-');
@@ -66,37 +131,20 @@ export function exportMonthlyPdf({ month, transactions, categories, stats, forma
   y = addStatRow(pdf, 'Lucro Líquido', formatCurrency(stats.netProfit), y, stats.netProfit >= 0 ? [16, 185, 129] : [239, 68, 68]);
   y += 5;
 
-  // Category breakdown - Expenses
+  // Gráfico
   if (stats.categoryBreakdown.length > 0) {
-    y = addSectionTitle(pdf, 'Gastos por Categoria', y);
-    for (const item of stats.categoryBreakdown) {
-      const cat = categories.find(c => c.id === item.categoryId);
-      y = addStatRow(pdf, `  ${cat?.name || 'Outros'} (${item.percentage.toFixed(1)}%)`, formatCurrency(item.amount), y);
-    }
-    y += 5;
-  }
-
-  // Income breakdown
-  if (stats.incomeBreakdown.length > 0) {
-    y = addSectionTitle(pdf, 'Entradas por Categoria', y);
-    for (const item of stats.incomeBreakdown) {
-      const cat = categories.find(c => c.id === item.categoryId);
-      y = addStatRow(pdf, `  ${cat?.name || 'Outros'} (${item.percentage.toFixed(1)}%)`, formatCurrency(item.amount), y);
-    }
-    y += 5;
+    y = drawCategoryChart(pdf, stats.categoryBreakdown, categories, y, stats.totalExpenses);
   }
 
   // Transactions list
-  y = addSectionTitle(pdf, 'Transações', y);
+  y = addSectionTitle(pdf, 'Transações do Período', y);
   
-  // Table header
   if (y > 260) { pdf.addPage(); y = 20; }
   pdf.setFontSize(9);
   pdf.setTextColor(120, 120, 120);
   pdf.text('Data', 15, y);
   pdf.text('Descrição', 45, y);
   pdf.text('Categoria', 110, y);
-  pdf.text('Tipo', 155, y);
   pdf.text('Valor', 195, y, { align: 'right' });
   y += 2;
   pdf.setDrawColor(200, 200, 200);
@@ -108,7 +156,6 @@ export function exportMonthlyPdf({ month, transactions, categories, stats, forma
   for (const t of sorted) {
     if (y > 275) { pdf.addPage(); y = 20; }
     const cat = categories.find(c => c.id === t.categoryId);
-    const typeLabel = t.type === 'income' ? 'Entrada' : t.type === 'expense' ? 'Saída' : 'Investimento';
     const color: [number, number, number] = t.type === 'income' ? [16, 185, 129] : t.type === 'expense' ? [239, 68, 68] : [59, 130, 246];
     
     pdf.setFontSize(9);
@@ -116,27 +163,24 @@ export function exportMonthlyPdf({ month, transactions, categories, stats, forma
     pdf.text(t.date.split('-').reverse().join('/'), 15, y);
     pdf.text((t.description || '-').substring(0, 30), 45, y);
     pdf.text((cat?.name || '-').substring(0, 20), 110, y);
-    pdf.text(typeLabel, 155, y);
     pdf.setTextColor(...color);
     pdf.text(formatCurrency(t.amount), 195, y, { align: 'right' });
     y += 6;
   }
 
-  // Footer
   pdf.setFontSize(8);
   pdf.setTextColor(150, 150, 150);
   pdf.text(`Gerado por SLX Finance em ${new Date().toLocaleDateString('pt-BR')}`, 15, 285);
 
-  pdf.save(`SLX-Finance-${monthName}-${yearStr}.pdf`);
+  await saveAndSharePdf(pdf, `SLX-Finance-${monthName}-${yearStr}.pdf`);
 }
 
-export function exportAnnualPdf({ year, transactions, categories, formatCurrency }: ExportAnnualPdfParams) {
+export async function exportAnnualPdf({ year, transactions, categories, formatCurrency }: ExportAnnualPdfParams) {
   const pdf = new jsPDF();
   const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
   let y = addHeader(pdf, 'SLX Finance', `Relatório Anual - ${year}`, 20);
 
-  // Annual totals
   const yearTransactions = transactions.filter(t => t.date.startsWith(String(year)));
   const totalIncome = yearTransactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
   const totalExpenses = yearTransactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
@@ -150,16 +194,12 @@ export function exportAnnualPdf({ year, transactions, categories, formatCurrency
   y = addStatRow(pdf, 'Lucro Líquido', formatCurrency(netProfit), y, netProfit >= 0 ? [16, 185, 129] : [239, 68, 68]);
   y += 8;
 
-  // Monthly breakdown table
   y = addSectionTitle(pdf, 'Resumo Mensal', y);
-  
-  // Table header
   pdf.setFontSize(9);
   pdf.setTextColor(120, 120, 120);
   pdf.text('Mês', 15, y);
   pdf.text('Entradas', 70, y, { align: 'right' });
   pdf.text('Saídas', 110, y, { align: 'right' });
-  pdf.text('Invest.', 145, y, { align: 'right' });
   pdf.text('Lucro', 195, y, { align: 'right' });
   y += 2;
   pdf.line(15, y, 195, y);
@@ -181,35 +221,14 @@ export function exportAnnualPdf({ year, transactions, categories, formatCurrency
     pdf.text(formatCurrency(mIncome), 70, y, { align: 'right' });
     pdf.setTextColor(239, 68, 68);
     pdf.text(formatCurrency(mExpense), 110, y, { align: 'right' });
-    pdf.setTextColor(59, 130, 246);
-    pdf.text(formatCurrency(mInvest), 145, y, { align: 'right' });
     pdf.setTextColor(mProfit >= 0 ? 16 : 239, mProfit >= 0 ? 185 : 68, mProfit >= 0 ? 129 : 68);
     pdf.text(formatCurrency(mProfit), 195, y, { align: 'right' });
     y += 6;
   }
 
-  y += 5;
-
-  // Top expense categories
-  const expenseMap: Record<string, number> = {};
-  yearTransactions.filter(t => t.type === 'expense').forEach(t => {
-    expenseMap[t.categoryId] = (expenseMap[t.categoryId] || 0) + t.amount;
-  });
-  const topExpenses = Object.entries(expenseMap).sort((a, b) => b[1] - a[1]).slice(0, 10);
-
-  if (topExpenses.length > 0) {
-    y = addSectionTitle(pdf, 'Top Categorias de Gastos', y);
-    for (const [catId, amount] of topExpenses) {
-      const cat = categories.find(c => c.id === catId);
-      const pct = totalExpenses > 0 ? ((amount / totalExpenses) * 100).toFixed(1) : '0';
-      y = addStatRow(pdf, `  ${cat?.name || 'Outros'} (${pct}%)`, formatCurrency(amount), y);
-    }
-  }
-
-  // Footer
   pdf.setFontSize(8);
   pdf.setTextColor(150, 150, 150);
   pdf.text(`Gerado por SLX Finance em ${new Date().toLocaleDateString('pt-BR')}`, 15, 285);
 
-  pdf.save(`SLX-Finance-Anual-${year}.pdf`);
+  await saveAndSharePdf(pdf, `SLX-Finance-Anual-${year}.pdf`);
 }
