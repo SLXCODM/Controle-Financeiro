@@ -29,7 +29,7 @@ export default function Dashboard() {
     .slice(0, 5);
 
   return (
-    <div className="safe-top safe-bottom min-h-full p-4 pb-24 lg:p-6">
+    <div className="safe-top safe-bottom min-h-full overflow-hidden p-4 pb-24 lg:p-6">
       {/* Month Selector */}
       <div className="mb-6">
         <MonthSelector />
@@ -87,18 +87,18 @@ export default function Dashboard() {
           <CardTitle className="text-lg">Resumo do Mês</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-3">
-          <div className="flex items-center justify-between rounded-lg bg-muted p-4">
-            <span className="text-muted-foreground">Total de Transações</span>
+          <div className="flex items-center justify-between rounded-lg bg-muted p-4 overflow-hidden">
+            <span className="text-muted-foreground text-sm">Total de Transações</span>
             <span className="text-xl font-bold">{recentTransactions.length}</span>
           </div>
-          <div className="flex items-center justify-between rounded-lg bg-muted p-4">
-            <span className="text-muted-foreground">Investimentos</span>
-            <span className="text-xl font-bold text-investment">
+          <div className="flex items-center justify-between rounded-lg bg-muted p-4 overflow-hidden">
+            <span className="text-muted-foreground text-sm">Investimentos</span>
+            <span className="truncate text-lg font-bold text-investment ml-2">
               {formatCurrency(monthlyStats.totalInvestments)}
             </span>
           </div>
-          <div className="flex items-center justify-between rounded-lg bg-muted p-4">
-            <span className="text-muted-foreground">Taxa de Economia</span>
+          <div className="flex items-center justify-between rounded-lg bg-muted p-4 overflow-hidden">
+            <span className="text-muted-foreground text-sm">Taxa de Economia</span>
             <span className="text-xl font-bold text-primary">
               {monthlyStats.totalIncome > 0
                 ? ((monthlyStats.netProfit / monthlyStats.totalIncome) * 100).toFixed(1)

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { Menu, LayoutDashboard, Receipt, FolderOpen, Target, PiggyBank, TrendingUp, Settings, Calendar, Percent, Repeat } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -24,6 +24,7 @@ export function MainLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
   const prevPathRef = useRef(location.pathname);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     if (prevPathRef.current !== location.pathname) {
@@ -31,6 +32,36 @@ export function MainLayout() {
       showInterstitialOnNavigation();
     }
   }, [location.pathname]);
+
+  // Swipe right from left edge to open sidebar
+  const handleTouchStart = useCallback((e: TouchEvent) => {
+    const touch = e.touches[0];
+    if (touch.clientX < 30) {
+      touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+    } else {
+      touchStartRef.current = null;
+    }
+  }, []);
+
+  const handleTouchEnd = useCallback((e: TouchEvent) => {
+    if (!touchStartRef.current) return;
+    const touch = e.changedTouches[0];
+    const deltaX = touch.clientX - touchStartRef.current.x;
+    const deltaY = Math.abs(touch.clientY - touchStartRef.current.y);
+    if (deltaX > 60 && deltaX > deltaY) {
+      setSidebarOpen(true);
+    }
+    touchStartRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    document.addEventListener('touchstart', handleTouchStart, { passive: true });
+    document.addEventListener('touchend', handleTouchEnd, { passive: true });
+    return () => {
+      document.removeEventListener('touchstart', handleTouchStart);
+      document.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [handleTouchStart, handleTouchEnd]);
 
   const NavContent = () => (
     <nav className="flex flex-col gap-1 p-4">
@@ -69,7 +100,7 @@ export function MainLayout() {
       </aside>
 
       {/* Mobile Header & Content */}
-      <div className="flex flex-1 flex-col">
+      <div className="flex flex-1 flex-col overflow-hidden">
         {/* Mobile Header */}
         <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-border bg-background/80 px-4 pt-[env(safe-area-inset-top)] backdrop-blur-lg lg:hidden">
           <div className="flex items-center gap-2">

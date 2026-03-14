@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { useFinance } from '@/context/FinanceContext';
 import { format, parseISO, addMonths, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useSwipeGesture } from '@/hooks/useSwipeGesture';
 
 export function MonthSelector() {
   const { currentMonth, setCurrentMonth } = useFinance();
@@ -11,27 +12,28 @@ export function MonthSelector() {
   const formattedMonth = format(monthDate, "MMMM 'de' yyyy", { locale: ptBR });
   
   const goToPreviousMonth = () => {
-    const newDate = subMonths(monthDate, 1);
-    setCurrentMonth(format(newDate, 'yyyy-MM'));
+    setCurrentMonth(format(subMonths(monthDate, 1), 'yyyy-MM'));
   };
   
   const goToNextMonth = () => {
-    const newDate = addMonths(monthDate, 1);
-    setCurrentMonth(format(newDate, 'yyyy-MM'));
+    setCurrentMonth(format(addMonths(monthDate, 1), 'yyyy-MM'));
   };
   
   const goToCurrentMonth = () => {
     setCurrentMonth(format(new Date(), 'yyyy-MM'));
   };
+
+  const swipeHandlers = useSwipeGesture({
+    onSwipeLeft: goToNextMonth,
+    onSwipeRight: goToPreviousMonth,
+  });
   
   return (
-    <div className="flex items-center justify-between rounded-xl bg-card p-3">
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={goToPreviousMonth}
-        className="h-9 w-9"
-      >
+    <div
+      className="flex items-center justify-between rounded-xl bg-card p-3"
+      {...swipeHandlers}
+    >
+      <Button variant="ghost" size="icon" onClick={goToPreviousMonth} className="h-9 w-9">
         <ChevronLeft className="h-5 w-5" />
       </Button>
       
@@ -43,12 +45,7 @@ export function MonthSelector() {
         {formattedMonth}
       </button>
       
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={goToNextMonth}
-        className="h-9 w-9"
-      >
+      <Button variant="ghost" size="icon" onClick={goToNextMonth} className="h-9 w-9">
         <ChevronRight className="h-5 w-5" />
       </Button>
     </div>
