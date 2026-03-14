@@ -19,33 +19,32 @@ export default function Transactions() {
   const start = startOfMonth(monthDate);
   const end = endOfMonth(monthDate);
 
-  const filteredTransactions = transactions
-    .filter(t => {
-      const date = parseISO(t.date);
-      const inMonth = isWithinInterval(date, { start, end });
-      if (!inMonth) return false;
-      
-      if (searchQuery) {
-        const category = categories.find(c => c.id === t.categoryId);
-        const searchLower = searchQuery.toLowerCase();
-        return (
-          t.description.toLowerCase().includes(searchLower) ||
-          category?.name.toLowerCase().includes(searchLower)
-        );
-      }
-      return true;
-    })
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const filteredTransactions = useMemo(() => 
+    transactions
+      .filter(t => {
+        const date = parseISO(t.date);
+        const inMonth = isWithinInterval(date, { start, end });
+        if (!inMonth) return false;
+        if (searchQuery) {
+          const category = categories.find(c => c.id === t.categoryId);
+          const searchLower = searchQuery.toLowerCase();
+          return t.description.toLowerCase().includes(searchLower) || category?.name.toLowerCase().includes(searchLower);
+        }
+        return true;
+      })
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+    [transactions, categories, start, end, searchQuery]
+  );
 
-  // Group by date
-  const groupedTransactions = filteredTransactions.reduce((groups, transaction) => {
-    const date = format(parseISO(transaction.date), 'yyyy-MM-dd');
-    if (!groups[date]) {
-      groups[date] = [];
-    }
-    groups[date].push(transaction);
-    return groups;
-  }, {} as Record<string, typeof filteredTransactions>);
+  const groupedTransactions = useMemo(() => 
+    filteredTransactions.reduce((groups, transaction) => {
+      const date = format(parseISO(transaction.date), 'yyyy-MM-dd');
+      if (!groups[date]) groups[date] = [];
+      groups[date].push(transaction);
+      return groups;
+    }, {} as Record<string, typeof filteredTransactions>),
+    [filteredTransactions]
+  );
 
   return (
     <div className="safe-top safe-bottom min-h-full p-4 pb-24 lg:p-6">
