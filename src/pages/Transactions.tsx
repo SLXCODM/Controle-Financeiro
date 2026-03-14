@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Plus, Search, Filter } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Plus, Search } from 'lucide-react';
 import { useFinance } from '@/context/FinanceContext';
 import { TransactionItem } from '@/components/finance/TransactionItem';
 import { AddTransactionDialog } from '@/components/finance/AddTransactionDialog';
