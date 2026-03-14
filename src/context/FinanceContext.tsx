@@ -153,7 +153,6 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     if (data.type === 'income') {
       const category = categories.find(c => c.id === data.categoryId);
       if (category) {
-        // Match income source by name (case-insensitive)
         const matchedSource = incomeSources.find(
           s => s.name.toLowerCase().trim() === category.name.toLowerCase().trim()
         );
@@ -171,14 +170,35 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
                 linkedTransactionId: transaction.id,
               };
               await db.addWalletTransaction(walletTx, user.id);
-
-              // Update wallet balance
               const wallet = wallets.find(w => w.id === dist.walletId);
               if (wallet) {
                 await db.updateWallet(dist.walletId, { balance: wallet.balance + creditAmount });
               }
             }
           }
+        }
+      }
+    }
+
+    // Auto-debit from wallet when expense matches a wallet name
+    if (data.type === 'expense') {
+      const category = categories.find(c => c.id === data.categoryId);
+      if (category) {
+        const matchedWallet = wallets.find(
+          w => w.name.toLowerCase().trim() === category.name.toLowerCase().trim()
+        );
+        if (matchedWallet) {
+          const walletTx: WalletTransaction = {
+            id: crypto.randomUUID(),
+            walletId: matchedWallet.id,
+            amount: data.amount,
+            type: 'debit',
+            description: `${data.description || category.name} - saída`,
+            date: data.date,
+            linkedTransactionId: transaction.id,
+          };
+          await db.addWalletTransaction(walletTx, user.id);
+          await db.updateWallet(matchedWallet.id, { balance: matchedWallet.balance - data.amount });
         }
       }
     }
