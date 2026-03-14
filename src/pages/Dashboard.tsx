@@ -29,7 +29,7 @@ export default function Dashboard() {
     .slice(0, 5);
 
   return (
-    <div className="safe-top safe-bottom min-h-full p-4 pb-24 lg:p-6">
+    <div className="safe-top safe-bottom min-h-full overflow-hidden p-4 pb-24 lg:p-6">
       {/* Month Selector */}
       <div className="mb-6">
         <MonthSelector />
