@@ -212,9 +212,41 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   }, [refreshData]);
 
   const deleteTransactionHandler = useCallback(async (id: string) => {
+    if (!user) return;
+    
+    // Find the transaction being deleted to reverse wallet distributions
+    const transaction = transactions.find(t => t.id === id);
+    if (transaction) {
+      // Find all wallet transactions linked to this transaction
+      const linkedWalletTxs = walletTransactions.filter(wt => wt.linkedTransactionId === id);
+      
+      for (const wt of linkedWalletTxs) {
+        // Reverse the balance change
+        const wallet = wallets.find(w => w.id === wt.walletId);
+        if (wallet) {
+          const reverseAmount = wt.type === 'credit' 
+            ? wallet.balance - wt.amount 
+            : wallet.balance + wt.amount;
+          await db.updateWallet(wt.walletId, { balance: reverseAmount });
+        }
+        // Delete the wallet transaction
+        await db.deleteWalletTransaction(wt.id);
+      }
+
+      // Reverse savings goal contribution
+      if (transaction.savingsGoalId && transaction.savingsContribution && transaction.savingsContribution > 0) {
+        const goal = savingsGoals.find(g => g.id === transaction.savingsGoalId);
+        if (goal) {
+          await db.updateSavingsGoal(transaction.savingsGoalId, {
+            currentAmount: Math.max(0, goal.currentAmount - transaction.savingsContribution),
+          });
+        }
+      }
+    }
+    
     await db.deleteTransaction(id);
     refreshData();
-  }, [refreshData]);
+  }, [user, transactions, walletTransactions, wallets, savingsGoals, refreshData]);
 
   const addCategoryHandler = useCallback(async (data: Omit<Category, 'id'>) => {
     if (!user) return;
