@@ -218,6 +218,10 @@ export async function addWalletTransaction(t: WalletTransaction, userId: string)
   });
 }
 
+export async function deleteWalletTransaction(id: string): Promise<void> {
+  await supabase.from('wallet_transactions').delete().eq('id', id);
+}
+
 // ============ Recurring Transactions ============
 export async function getRecurringTransactions(): Promise<RecurringTransaction[]> {
   const { data } = await supabase.from('recurring_transactions').select('*').order('created_at', { ascending: false });
