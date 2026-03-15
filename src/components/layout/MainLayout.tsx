@@ -33,10 +33,12 @@ export function MainLayout() {
     }
   }, [location.pathname]);
 
-  // Swipe right from left edge to open sidebar
+  // Swipe right from left edge (bottom half of screen) to open sidebar
   const handleTouchStart = useCallback((e: TouchEvent) => {
     const touch = e.touches[0];
-    if (touch.clientX < 30) {
+    const screenHeight = window.innerHeight;
+    // Only activate from left edge AND bottom half of screen to avoid Android back gesture conflict
+    if (touch.clientX < 40 && touch.clientY > screenHeight * 0.5) {
       touchStartRef.current = { x: touch.clientX, y: touch.clientY };
     } else {
       touchStartRef.current = null;
