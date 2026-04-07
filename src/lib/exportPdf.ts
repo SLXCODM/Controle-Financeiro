@@ -1,7 +1,5 @@
 import { jsPDF } from 'jspdf';
 import { Transaction, Category, MonthlyStats } from '@/types/finance';
-import { Filesystem, Directory } from '@capacitor/filesystem';
-import { Share } from '@capacitor/share';
 
 interface ExportMonthlyPdfParams {
   month: string; // YYYY-MM
