@@ -20,6 +20,9 @@ interface ExportAnnualPdfParams {
 
 async function saveAndSharePdf(pdf: jsPDF, fileName: string) {
   try {
+    const { Filesystem, Directory } = await import('@capacitor/filesystem');
+    const { Share } = await import('@capacitor/share');
+
     const pdfBase64 = pdf.output('datauristring').split(',')[1];
     const savedFile = await Filesystem.writeFile({
       path: fileName,
@@ -35,7 +38,6 @@ async function saveAndSharePdf(pdf: jsPDF, fileName: string) {
     });
   } catch (error) {
     console.error('Erro ao compartilhar PDF:', error);
-    // Fallback para download em navegador se falhar (útil para testes)
     pdf.save(fileName);
   }
 }
