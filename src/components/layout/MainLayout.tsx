@@ -37,8 +37,8 @@ export function MainLayout() {
   const handleTouchStart = useCallback((e: TouchEvent) => {
     const touch = e.touches[0];
     const screenHeight = window.innerHeight;
-    // Only activate from left edge AND bottom half of screen to avoid Android back gesture conflict
-    if (touch.clientX < 40 && touch.clientY > screenHeight * 0.5) {
+    // Ativar a partir da metade esquerda da tela para permitir abertura por gesto no Android
+    if (touch.clientX < window.innerWidth / 2 && touch.clientY > screenHeight * 0.1) {
       touchStartRef.current = { x: touch.clientX, y: touch.clientY };
     } else {
       touchStartRef.current = null;

@@ -7,6 +7,7 @@ import {
 import * as db from '@/lib/supabaseStorage';
 import { useAuth } from '@/context/AuthContext';
 import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
+import { toast } from '@/hooks/use-toast';
 
 interface FinanceContextType {
   transactions: Transaction[];
@@ -48,6 +49,16 @@ interface FinanceContextType {
   formatCurrency: (value: number) => string;
   refreshData: () => void;
 }
+
+const generateId = () => {
+  if (typeof window !== 'undefined' && window.crypto && window.crypto.randomUUID) {
+    return window.crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
 
 const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
 
@@ -138,223 +149,319 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   // Transaction actions
   const addTransactionHandler = useCallback(async (data: Omit<Transaction, 'id' | 'createdAt'>) => {
     if (!user) return;
-    const transaction: Transaction = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
-    await db.addTransaction(transaction, user.id);
+    try {
+      const transaction: Transaction = { ...data, id: generateId(), createdAt: new Date().toISOString() };
+      await db.addTransaction(transaction, user.id);
 
-    // Savings goal contribution
-    if (data.savingsGoalId && data.savingsContribution && data.savingsContribution > 0) {
-      const goal = savingsGoals.find(g => g.id === data.savingsGoalId);
-      if (goal) {
-        await db.updateSavingsGoal(data.savingsGoalId, { currentAmount: goal.currentAmount + data.savingsContribution });
+      // Savings goal contribution
+      if (data.savingsGoalId && data.savingsContribution && data.savingsContribution > 0) {
+        const goal = savingsGoals.find(g => g.id === data.savingsGoalId);
+        if (goal) {
+          await db.updateSavingsGoal(data.savingsGoalId, { currentAmount: goal.currentAmount + data.savingsContribution });
+        }
       }
-    }
 
-    // Auto-distribute income to wallets based on income sources
-    if (data.type === 'income') {
-      const category = categories.find(c => c.id === data.categoryId);
-      if (category) {
-        const matchedSource = incomeSources.find(
-          s => s.name.toLowerCase().trim() === category.name.toLowerCase().trim()
-        );
-        if (matchedSource && matchedSource.distributions.length > 0) {
-          for (const dist of matchedSource.distributions) {
-            if (dist.percentage > 0) {
-              const creditAmount = (data.amount * dist.percentage) / 100;
-              const walletTx: WalletTransaction = {
-                id: crypto.randomUUID(),
-                walletId: dist.walletId,
-                amount: creditAmount,
-                type: 'credit',
-                description: `${category.name} - distribuição automática`,
-                date: data.date,
-                linkedTransactionId: transaction.id,
-              };
-              await db.addWalletTransaction(walletTx, user.id);
-              const wallet = wallets.find(w => w.id === dist.walletId);
-              if (wallet) {
-                await db.updateWallet(dist.walletId, { balance: wallet.balance + creditAmount });
+      // Auto-distribute income to wallets based on income sources
+      if (data.type === 'income') {
+        const category = categories.find(c => c.id === data.categoryId);
+        if (category) {
+          const matchedSource = incomeSources.find(
+            s => s.name.toLowerCase().trim() === category.name.toLowerCase().trim()
+          );
+          if (matchedSource && matchedSource.distributions.length > 0) {
+            for (const dist of matchedSource.distributions) {
+              if (dist.percentage > 0) {
+                const creditAmount = (data.amount * dist.percentage) / 100;
+                const walletTx: WalletTransaction = {
+                  id: generateId(),
+                  walletId: dist.walletId,
+                  amount: creditAmount,
+                  type: 'credit',
+                  description: `${category.name} - distribuição automática`,
+                  date: data.date,
+                  linkedTransactionId: transaction.id,
+                };
+                await db.addWalletTransaction(walletTx, user.id);
+                const wallet = wallets.find(w => w.id === dist.walletId);
+                if (wallet) {
+                  await db.updateWallet(dist.walletId, { balance: wallet.balance + creditAmount });
+                }
               }
             }
           }
         }
       }
-    }
 
-    // Auto-debit from wallet when expense matches a wallet name
-    if (data.type === 'expense') {
-      const category = categories.find(c => c.id === data.categoryId);
-      if (category) {
-        const matchedWallet = wallets.find(
-          w => w.name.toLowerCase().trim() === category.name.toLowerCase().trim()
-        );
-        if (matchedWallet) {
-          const walletTx: WalletTransaction = {
-            id: crypto.randomUUID(),
-            walletId: matchedWallet.id,
-            amount: data.amount,
-            type: 'debit',
-            description: `${data.description || category.name} - saída`,
-            date: data.date,
-            linkedTransactionId: transaction.id,
-          };
-          await db.addWalletTransaction(walletTx, user.id);
-          await db.updateWallet(matchedWallet.id, { balance: matchedWallet.balance - data.amount });
+      // Auto-debit from wallet when expense matches a wallet name
+      if (data.type === 'expense') {
+        const category = categories.find(c => c.id === data.categoryId);
+        if (category) {
+          const matchedWallet = wallets.find(
+            w => w.name.toLowerCase().trim() === category.name.toLowerCase().trim()
+          );
+          if (matchedWallet) {
+            const walletTx: WalletTransaction = {
+              id: generateId(),
+              walletId: matchedWallet.id,
+              amount: data.amount,
+              type: 'debit',
+              description: `${data.description || category.name} - saída`,
+              date: data.date,
+              linkedTransactionId: transaction.id,
+            };
+            await db.addWalletTransaction(walletTx, user.id);
+            await db.updateWallet(matchedWallet.id, { balance: matchedWallet.balance - data.amount });
+          }
         }
       }
-    }
 
-    refreshData();
+      refreshData();
+    } catch (error: any) {
+      console.error('Erro de Matemática/Persistência:', error);
+      toast({
+        title: 'Erro de Banco de Dados',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
   }, [user, savingsGoals, categories, incomeSources, wallets, refreshData]);
 
   const updateTransactionHandler = useCallback(async (id: string, updates: Partial<Transaction>) => {
-    await db.updateTransaction(id, updates);
-    refreshData();
+    try {
+      await db.updateTransaction(id, updates);
+      refreshData();
+    } catch (error: any) {
+      toast({ title: 'Erro de Banco de Dados', description: error.message, variant: 'destructive' });
+    }
   }, [refreshData]);
 
   const deleteTransactionHandler = useCallback(async (id: string) => {
     if (!user) return;
-    
-    // Find the transaction being deleted to reverse wallet distributions
-    const transaction = transactions.find(t => t.id === id);
-    if (transaction) {
-      // Find all wallet transactions linked to this transaction
-      const linkedWalletTxs = walletTransactions.filter(wt => wt.linkedTransactionId === id);
-      
-      for (const wt of linkedWalletTxs) {
-        // Reverse the balance change
-        const wallet = wallets.find(w => w.id === wt.walletId);
-        if (wallet) {
-          const reverseAmount = wt.type === 'credit' 
-            ? wallet.balance - wt.amount 
-            : wallet.balance + wt.amount;
-          await db.updateWallet(wt.walletId, { balance: reverseAmount });
+    try {
+      // Find the transaction being deleted to reverse wallet distributions
+      const transaction = transactions.find(t => t.id === id);
+      if (transaction) {
+        // Find all wallet transactions linked to this transaction
+        const linkedWalletTxs = walletTransactions.filter(wt => wt.linkedTransactionId === id);
+        
+        for (const wt of linkedWalletTxs) {
+          // Reverse the balance change
+          const wallet = wallets.find(w => w.id === wt.walletId);
+          if (wallet) {
+            const reverseAmount = wt.type === 'credit' 
+              ? wallet.balance - wt.amount 
+              : wallet.balance + wt.amount;
+            await db.updateWallet(wt.walletId, { balance: reverseAmount });
+          }
+          // Delete the wallet transaction
+          await db.deleteWalletTransaction(wt.id);
         }
-        // Delete the wallet transaction
-        await db.deleteWalletTransaction(wt.id);
-      }
 
-      // Reverse savings goal contribution
-      if (transaction.savingsGoalId && transaction.savingsContribution && transaction.savingsContribution > 0) {
-        const goal = savingsGoals.find(g => g.id === transaction.savingsGoalId);
-        if (goal) {
-          await db.updateSavingsGoal(transaction.savingsGoalId, {
-            currentAmount: Math.max(0, goal.currentAmount - transaction.savingsContribution),
-          });
+        // Reverse savings goal contribution
+        if (transaction.savingsGoalId && transaction.savingsContribution && transaction.savingsContribution > 0) {
+          const goal = savingsGoals.find(g => g.id === transaction.savingsGoalId);
+          if (goal) {
+            await db.updateSavingsGoal(transaction.savingsGoalId, {
+              currentAmount: Math.max(0, goal.currentAmount - transaction.savingsContribution),
+            });
+          }
         }
       }
+      
+      await db.deleteTransaction(id);
+      refreshData();
+    } catch (error: any) {
+      toast({ title: 'Erro de Banco de Dados', description: error.message, variant: 'destructive' });
     }
-    
-    await db.deleteTransaction(id);
-    refreshData();
   }, [user, transactions, walletTransactions, wallets, savingsGoals, refreshData]);
 
   const addCategoryHandler = useCallback(async (data: Omit<Category, 'id'>) => {
     if (!user) return;
-    await db.addCategory({ ...data, id: crypto.randomUUID() }, user.id);
-    refreshData();
+    try {
+      await db.addCategory({ ...data, id: generateId() }, user.id);
+      refreshData();
+    } catch (error: any) {
+      toast({ title: 'Erro de Banco de Dados', description: error.message, variant: 'destructive' });
+    }
   }, [user, refreshData]);
 
   const updateCategoryHandler = useCallback(async (id: string, updates: Partial<Category>) => {
-    await db.updateCategory(id, updates);
-    refreshData();
+    try {
+      await db.updateCategory(id, updates);
+      refreshData();
+    } catch (error: any) {
+      toast({ title: 'Erro de Banco de Dados', description: error.message, variant: 'destructive' });
+    }
   }, [refreshData]);
 
   const deleteCategoryHandler = useCallback(async (id: string) => {
-    await db.deleteCategory(id);
-    refreshData();
+    try {
+      await db.deleteCategory(id);
+      refreshData();
+    } catch (error: any) {
+      toast({ title: 'Erro de Banco de Dados', description: error.message, variant: 'destructive' });
+    }
   }, [refreshData]);
 
   const addFinancialGoalHandler = useCallback(async (data: Omit<FinancialGoal, 'id'>) => {
     if (!user) return;
-    await db.addFinancialGoal({ ...data, id: crypto.randomUUID() }, user.id);
-    refreshData();
+    try {
+      await db.addFinancialGoal({ ...data, id: generateId() }, user.id);
+      refreshData();
+    } catch (error: any) {
+      toast({ title: 'Erro de Banco de Dados', description: error.message, variant: 'destructive' });
+    }
   }, [user, refreshData]);
 
   const updateFinancialGoalHandler = useCallback(async (id: string, updates: Partial<FinancialGoal>) => {
-    await db.updateFinancialGoal(id, updates);
-    refreshData();
+    try {
+      await db.updateFinancialGoal(id, updates);
+      refreshData();
+    } catch (error: any) {
+      toast({ title: 'Erro de Banco de Dados', description: error.message, variant: 'destructive' });
+    }
   }, [refreshData]);
 
   const deleteFinancialGoalHandler = useCallback(async (id: string) => {
-    await db.deleteFinancialGoal(id);
-    refreshData();
+    try {
+      await db.deleteFinancialGoal(id);
+      refreshData();
+    } catch (error: any) {
+      toast({ title: 'Erro de Banco de Dados', description: error.message, variant: 'destructive' });
+    }
   }, [refreshData]);
 
   const addSavingsGoalHandler = useCallback(async (data: Omit<SavingsGoal, 'id' | 'createdAt'>) => {
     if (!user) return;
-    await db.addSavingsGoal({ ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString() }, user.id);
-    refreshData();
+    try {
+      await db.addSavingsGoal({ ...data, id: generateId(), createdAt: new Date().toISOString() }, user.id);
+      refreshData();
+    } catch (error: any) {
+      toast({ title: 'Erro de Banco de Dados', description: error.message, variant: 'destructive' });
+    }
   }, [user, refreshData]);
 
   const updateSavingsGoalHandler = useCallback(async (id: string, updates: Partial<SavingsGoal>) => {
-    await db.updateSavingsGoal(id, updates);
-    refreshData();
+    try {
+      await db.updateSavingsGoal(id, updates);
+      refreshData();
+    } catch (error: any) {
+      toast({ title: 'Erro de Banco de Dados', description: error.message, variant: 'destructive' });
+    }
   }, [refreshData]);
 
   const deleteSavingsGoalHandler = useCallback(async (id: string) => {
-    await db.deleteSavingsGoal(id);
-    refreshData();
+    try {
+      await db.deleteSavingsGoal(id);
+      refreshData();
+    } catch (error: any) {
+      toast({ title: 'Erro de Banco de Dados', description: error.message, variant: 'destructive' });
+    }
   }, [refreshData]);
 
   const addIncomeSourceHandler = useCallback(async (data: Omit<IncomeSource, 'id'>) => {
     if (!user) return;
-    await db.addIncomeSource({ ...data, id: crypto.randomUUID() }, user.id);
-    refreshData();
+    try {
+      await db.addIncomeSource({ ...data, id: generateId() }, user.id);
+      refreshData();
+    } catch (error: any) {
+      toast({ title: 'Erro de Banco de Dados', description: error.message, variant: 'destructive' });
+    }
   }, [user, refreshData]);
 
   const updateIncomeSourceHandler = useCallback(async (id: string, updates: Partial<IncomeSource>) => {
-    await db.updateIncomeSource(id, updates);
-    refreshData();
+    try {
+      await db.updateIncomeSource(id, updates);
+      refreshData();
+    } catch (error: any) {
+      toast({ title: 'Erro de Banco de Dados', description: error.message, variant: 'destructive' });
+    }
   }, [refreshData]);
 
   const deleteIncomeSourceHandler = useCallback(async (id: string) => {
-    await db.deleteIncomeSource(id);
-    refreshData();
+    try {
+      await db.deleteIncomeSource(id);
+      refreshData();
+    } catch (error: any) {
+      toast({ title: 'Erro de Banco de Dados', description: error.message, variant: 'destructive' });
+    }
   }, [refreshData]);
 
   const addWalletHandler = useCallback(async (data: Omit<Wallet, 'id'>) => {
     if (!user) return;
-    await db.addWallet({ ...data, id: crypto.randomUUID() }, user.id);
-    refreshData();
+    try {
+      await db.addWallet({ ...data, id: generateId() }, user.id);
+      refreshData();
+    } catch (error: any) {
+      toast({ title: 'Erro de Banco de Dados', description: error.message, variant: 'destructive' });
+    }
   }, [user, refreshData]);
 
   const updateWalletHandler = useCallback(async (id: string, updates: Partial<Wallet>) => {
-    await db.updateWallet(id, updates);
-    refreshData();
+    try {
+      await db.updateWallet(id, updates);
+      refreshData();
+    } catch (error: any) {
+      toast({ title: 'Erro de Banco de Dados', description: error.message, variant: 'destructive' });
+    }
   }, [refreshData]);
 
   const deleteWalletHandler = useCallback(async (id: string) => {
-    await db.deleteWallet(id);
-    refreshData();
+    try {
+      await db.deleteWallet(id);
+      refreshData();
+    } catch (error: any) {
+      toast({ title: 'Erro de Banco de Dados', description: error.message, variant: 'destructive' });
+    }
   }, [refreshData]);
 
   const addWalletTransactionHandler = useCallback(async (data: Omit<WalletTransaction, 'id'>) => {
     if (!user) return;
-    await db.addWalletTransaction({ ...data, id: crypto.randomUUID() }, user.id);
-    refreshData();
+    try {
+      await db.addWalletTransaction({ ...data, id: generateId() }, user.id);
+      refreshData();
+    } catch (error: any) {
+      toast({ title: 'Erro de Banco de Dados', description: error.message, variant: 'destructive' });
+    }
   }, [user, refreshData]);
 
   const addRecurringHandler = useCallback(async (data: Omit<RecurringTransaction, 'id' | 'createdAt'>) => {
     if (!user) return;
-    const item: RecurringTransaction = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
-    await db.addRecurringTransaction(item, user.id);
-    refreshData();
+    try {
+      const item: RecurringTransaction = { ...data, id: generateId(), createdAt: new Date().toISOString() };
+      await db.addRecurringTransaction(item, user.id);
+      refreshData();
+    } catch (error: any) {
+      toast({ title: 'Erro de Banco de Dados', description: error.message, variant: 'destructive' });
+    }
   }, [user, refreshData]);
 
   const updateRecurringHandler = useCallback(async (id: string, updates: Partial<RecurringTransaction>) => {
-    await db.updateRecurringTransaction(id, updates);
-    refreshData();
+    try {
+      await db.updateRecurringTransaction(id, updates);
+      refreshData();
+    } catch (error: any) {
+      toast({ title: 'Erro de Banco de Dados', description: error.message, variant: 'destructive' });
+    }
   }, [refreshData]);
 
   const deleteRecurringHandler = useCallback(async (id: string) => {
-    await db.deleteRecurringTransaction(id);
-    refreshData();
+    try {
+      await db.deleteRecurringTransaction(id);
+      refreshData();
+    } catch (error: any) {
+      toast({ title: 'Erro de Banco de Dados', description: error.message, variant: 'destructive' });
+    }
   }, [refreshData]);
 
   const updateSettingsHandler = useCallback(async (updates: Partial<UserSettings>) => {
-    const updated = { ...settings, ...updates };
-    setSettings(updated);
-    await db.updateUserSettings(updates);
+    try {
+      const updated = { ...settings, ...updates };
+      setSettings(updated);
+      await db.updateUserSettings(updates);
+    } catch (error: any) {
+      toast({ title: 'Erro de Banco de Dados', description: error.message, variant: 'destructive' });
+    }
   }, [settings]);
 
   return (
