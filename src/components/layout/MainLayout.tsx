@@ -38,7 +38,8 @@ export function MainLayout() {
     const touch = e.touches[0];
     const screenHeight = window.innerHeight;
     // Ativar a partir da metade esquerda da tela para evitar conflito com o 'voltar' nas bordas no Android
-    if (touch.clientX < window.innerWidth / 2 && touch.clientY > screenHeight * 0.1) {
+    // Ativar a partir da borda esquerda (20% da tela) para abrir o menu
+    if (touch.clientX < window.innerWidth * 0.2 && touch.clientY > screenHeight * 0.1) {
       touchStartRef.current = { x: touch.clientX, y: touch.clientY };
     } else {
       touchStartRef.current = null;
@@ -50,7 +51,7 @@ export function MainLayout() {
     const touch = e.changedTouches[0];
     const deltaX = touch.clientX - touchStartRef.current.x;
     const deltaY = Math.abs(touch.clientY - touchStartRef.current.y);
-    if (deltaX > 60 && deltaX > deltaY) {
+    if (deltaX > 40 && deltaX > deltaY) {
       setSidebarOpen(true);
     }
     touchStartRef.current = null;
