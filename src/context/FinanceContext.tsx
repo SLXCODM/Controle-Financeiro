@@ -161,18 +161,25 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   const addTransactionHandler = useCallback(async (data: Omit<Transaction, 'id' | 'createdAt'>) => {
     try {
       const transaction: Transaction = { ...data, id: generateId(), createdAt: new Date().toISOString() };
+      
+      // Salva transação
       await db.addTransaction(transaction, user?.id || '');
 
       // Recalcula divisões se for receita
       if (data.type === 'income') {
         const category = categories.find(c => c.id === data.categoryId);
         if (category) {
+          // Busca fonte de renda pelo nome da categoria (ignorando espaços e case)
+          const categoryNameLower = category.name.toLowerCase().trim();
           const matchedSource = incomeSources.find(
-            s => s.name.toLowerCase().trim() === category.name.toLowerCase().trim()
+            s => s.name.toLowerCase().trim() === categoryNameLower
           );
-          if (matchedSource && matchedSource.distributions.length > 0) {
+          
+          if (matchedSource && matchedSource.distributions && matchedSource.distributions.length > 0) {
             for (const dist of matchedSource.distributions) {
               const creditAmount = (data.amount * dist.percentage) / 100;
+              if (creditAmount <= 0) continue;
+
               const walletTx: WalletTransaction = {
                 id: generateId(),
                 walletId: dist.walletId,
@@ -182,19 +189,28 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
                 date: data.date,
                 linkedTransactionId: transaction.id,
               };
+              
               await db.addWalletTransaction(walletTx, user?.id || '');
+              
+              // Atualiza saldo da carteira
               const wallet = wallets.find(w => w.id === dist.walletId);
               if (wallet) {
-                await db.updateWallet(dist.walletId, { balance: wallet.balance + creditAmount });
+                await db.updateWallet(dist.walletId, { 
+                  balance: Number(wallet.balance) + creditAmount 
+                });
               }
             }
           }
         }
       }
-      refreshData();
+      
+      await refreshData();
+      toast({ title: 'Sucesso', description: 'Transação salva e divisões aplicadas.' });
     } catch (error: any) {
       console.error('Error adding transaction:', error);
       toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' });
+      // Tenta atualizar a UI mesmo em erro para mostrar o que foi salvo localmente
+      refreshData();
     }
   }, [user, categories, incomeSources, wallets, refreshData]);
 

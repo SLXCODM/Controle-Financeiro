@@ -39,13 +39,19 @@ export async function getTransactions(): Promise<Transaction[]> {
 }
 
 export async function addTransaction(t: Transaction, userId: string): Promise<void> {
+  // Salva localmente primeiro
+  const local = getLocal<Transaction[]>('transactions') || [];
+  setLocal('transactions', [t, ...local]);
+
   const { error } = await supabase.from('transactions').insert({
     id: t.id, user_id: userId, amount: t.amount, type: t.type, category_id: t.categoryId,
     description: t.description, date: t.date, savings_goal_id: t.savingsGoalId || null,
     savings_contribution: t.savingsContribution || null, is_recurring: t.isRecurring || false,
     recurrence_id: t.recurrenceId || null,
   });
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.warn('Sync error, kept local copy:', error.message);
+  }
 }
 
 export async function updateTransaction(id: string, updates: Partial<Transaction>): Promise<void> {
@@ -202,7 +208,13 @@ export async function addWallet(w: Wallet, userId: string): Promise<void> {
 }
 
 export async function updateWallet(id: string, updates: Partial<Wallet>): Promise<void> {
-  await supabase.from('wallets').update(updates).eq('id', id);
+  // Salva localmente primeiro
+  const local = getLocal<Wallet[]>('wallets') || [];
+  const updated = local.map(w => w.id === id ? { ...w, ...updates } : w);
+  setLocal('wallets', updated);
+
+  const { error } = await supabase.from('wallets').update(updates).eq('id', id);
+  if (error) console.warn('Sync error (wallet):', error.message);
 }
 
 export async function deleteWallet(id: string): Promise<void> {
@@ -222,7 +234,12 @@ export async function getWalletTransactions(): Promise<WalletTransaction[]> {
 }
 
 export async function addWalletTransaction(t: WalletTransaction, userId: string): Promise<void> {
-  await supabase.from('wallet_transactions').insert({ id: t.id, user_id: userId, wallet_id: t.walletId, amount: t.amount, type: t.type, description: t.description, date: t.date, linked_transaction_id: t.linkedTransactionId || null });
+  // Salva localmente primeiro
+  const local = getLocal<WalletTransaction[]>('wallet_transactions') || [];
+  setLocal('wallet_transactions', [t, ...local]);
+
+  const { error } = await supabase.from('wallet_transactions').insert({ id: t.id, user_id: userId, wallet_id: t.walletId, amount: t.amount, type: t.type, description: t.description, date: t.date, linked_transaction_id: t.linkedTransactionId || null });
+  if (error) console.warn('Sync error (wallet_tx):', error.message);
 }
 
 export async function deleteWalletTransaction(id: string): Promise<void> {
