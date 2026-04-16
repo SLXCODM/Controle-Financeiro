@@ -76,7 +76,6 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   const [recurringTransactions, setRecurringTransactions] = useState<RecurringTransaction[]>([]);
 
   const refreshData = useCallback(async () => {
-    // Carrega dados mesmo se o usuário estiver offline ou deslogado inicialmente
     try {
       if (user) {
         await db.processRecurringTransactions(user.id);
@@ -94,14 +93,33 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         db.getRecurringTransactions(),
       ]);
 
-      setTransactions(t || []);
+      const currentTransactions = t || [];
+      const currentWallets = w || [];
+      const currentWalletTxs = wt || [];
+
+      // --- RECÁLCULO DE SEGURANÇA ---
+      // Garante que o saldo das carteiras bate com o histórico de transações de carteira
+      const updatedWallets = currentWallets.map(wallet => {
+        const totalBalance = currentWalletTxs
+          .filter(tx => tx.walletId === wallet.id)
+          .reduce((sum, tx) => tx.type === 'credit' ? sum + tx.amount : sum - tx.amount, 0);
+        
+        // Se o saldo calculado for diferente do saldo salvo, atualiza
+        if (Math.abs(wallet.balance - totalBalance) > 0.01) {
+          db.updateWallet(wallet.id, { balance: totalBalance });
+          return { ...wallet, balance: totalBalance };
+        }
+        return wallet;
+      });
+
+      setTransactions(currentTransactions);
       setCategories(c || []);
       setFinancialGoals(fg || []);
       setSavingsGoals(sg || []);
       setSettings(s || { displayName: 'Usuário', currency: 'BRL', privacyMode: false });
       setIncomeSources(is || []);
-      setWallets(w || []);
-      setWalletTransactions(wt || []);
+      setWallets(updatedWallets);
+      setWalletTransactions(currentWalletTxs);
       setRecurringTransactions(rt || []);
     } catch (error) {
       console.error('Error refreshing data:', error);
@@ -220,9 +238,26 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   }, [refreshData]);
 
   const deleteTransactionHandler = useCallback(async (id: string) => {
-    await db.deleteTransaction(id);
-    refreshData();
-  }, [refreshData]);
+    try {
+      // --- ESTORNO AUTOMÁTICO ---
+      // Busca se existem transações de carteira vinculadas a esta transação
+      const linkedWalletTxs = walletTransactions.filter(wt => wt.linkedTransactionId === id);
+      
+      for (const wTx of linkedWalletTxs) {
+        // Deleta a transação da carteira
+        await db.deleteWalletTransaction(wTx.id);
+        
+        // O refreshData posterior cuidará de recalcular o saldo da carteira via Recálculo de Segurança
+      }
+
+      await db.deleteTransaction(id);
+      await refreshData();
+      toast({ title: 'Sucesso', description: 'Transação e divisões vinculadas removidas.' });
+    } catch (error: any) {
+      console.error('Error deleting transaction:', error);
+      toast({ title: 'Erro ao deletar', description: error.message, variant: 'destructive' });
+    }
+  }, [walletTransactions, refreshData]);
 
   const addCategoryHandler = useCallback(async (data: Omit<Category, 'id'>) => {
     const category: Category = { ...data, id: generateId() };
