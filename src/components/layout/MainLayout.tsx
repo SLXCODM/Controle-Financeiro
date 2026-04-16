@@ -130,11 +130,13 @@ export function MainLayout() {
         </header>
 
         {/* Main Content */}
-        <main className="flex-1 overflow-auto">
-          <Outlet />
+        <main className="flex-1 overflow-x-hidden overflow-y-auto flex flex-col">
+          <div className="flex-1">
+            <Outlet />
+          </div>
           
           {/* Footer Credit Message */}
-          <footer className="flex items-center justify-center gap-2 py-6 text-muted-foreground border-t border-border/40 mt-auto bg-background/50">
+          <footer className="flex items-center justify-center gap-2 py-6 text-muted-foreground border-t border-border/40 bg-background/50 w-full shrink-0">
             <Instagram className="h-4 w-4" />
             <span className="text-xs font-medium tracking-wide">
               siga o criador <span className="text-primary font-bold">@slx.wav</span> no Instagram
