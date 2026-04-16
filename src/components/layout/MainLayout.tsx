@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { Menu, LayoutDashboard, Receipt, FolderOpen, Target, PiggyBank, TrendingUp, Settings, Calendar, Percent, Repeat } from 'lucide-react';
+import { Menu, LayoutDashboard, Receipt, FolderOpen, Target, PiggyBank, TrendingUp, Settings, Calendar, Percent, Repeat, Instagram } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -132,6 +132,14 @@ export function MainLayout() {
         {/* Main Content */}
         <main className="flex-1 overflow-auto">
           <Outlet />
+          
+          {/* Footer Credit Message */}
+          <footer className="flex items-center justify-center gap-2 py-6 text-muted-foreground border-t border-border/40 mt-auto bg-background/50">
+            <Instagram className="h-4 w-4" />
+            <span className="text-xs font-medium tracking-wide">
+              siga o criador <span className="text-primary font-bold">@slx.wav</span> no Instagram
+            </span>
+          </footer>
         </main>
       </div>
     </div>
